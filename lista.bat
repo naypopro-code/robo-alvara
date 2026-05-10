@@ -1,0 +1,20 @@
+@echo off
+title Listar Modelos Gemini
+setlocal
+set "PROJECT_ROOT=%~dp0"
+set "NODE_EXE=%PROJECT_ROOT%node-v25.9.0-win-x64\node.exe"
+
+cd /d "%PROJECT_ROOT%"
+
+if not exist "%NODE_EXE%" (
+    echo [ERRO] Node nao encontrado em: %NODE_EXE%
+    pause
+    exit /b 1
+)
+
+"%NODE_EXE%" src\lista.js
+set "EXITCODE=%ERRORLEVEL%"
+echo.
+pause > nul
+endlocal
+exit /b %EXITCODE%

@@ -1,4 +1,15 @@
 {
+  "name": "robo-alvara",
+  "version": "1.0.0",
+  "description": "Robo de triagem BDD EAA-DVS — analisa PDFs com Gemini e envia resultados para o Google Sheets.",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "triagem": "node src/main.js",
+    "lista": "node src/lista.js",
+    "teste:planilha": "node src/testePlanilha.js"
+  },
   "dependencies": {
     "@google/generative-ai": "latest"
   }
