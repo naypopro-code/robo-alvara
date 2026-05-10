@@ -87,7 +87,9 @@ npm run teste:planilha     :: src\testePlanilha.js
    - Aguarda `INTERVALO_PASTAS_MS` entre pastas.
    - Em caso de falha (qualquer stage), a pasta é colocada em uma **fila de retry em memória** e a falha vira um WARN no log narrativo — *nada* vai para `error.log` ainda.
 3. **Rodadas de retry:** após a 1ª passada, se a fila não estiver vazia, roda até `RETRY_TENTATIVAS` rodadas. Antes de cada rodada aguarda `RETRY_INTERVALO_MS`. Pastas que dão sucesso saem da fila; pastas que continuam falhando permanecem.
-4. **Falhas definitivas:** o que sobra na fila depois de todas as rodadas vai para `error.log`, com o campo `tentativas` indicando quantas tentativas foram feitas.
+4. **Falhas definitivas:** o que sobra na fila depois de todas as rodadas é tratado em duas frentes:
+   - Vai para `error.log` com o campo `tentativas` indicando quantas tentativas foram feitas.
+   - É **reportado na planilha** como uma linha com `status="ERRO"`, `motivo=<mensagem do último erro>` e os demais campos preenchidos com `"---"`. Assim a planilha sempre tem uma linha por pasta processada (sucesso ou falha definitiva). Se este POST de erro também falhar, é apenas registrado no log narrativo — não cascateia.
 5. No final, imprime `Sucesso: N | Falhas definitivas: N`.
 
 ## Logs

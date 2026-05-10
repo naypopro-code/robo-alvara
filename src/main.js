@@ -48,6 +48,40 @@ function gravarLog(mensagem) {
     fs.appendFileSync(CAMINHO_LOG, `[${timestamp}] ${mensagem}\n`);
 }
 
+// Reporta na planilha que uma pasta esgotou todas as tentativas.
+// status="ERRO", motivo=mensagem do ultimo erro. Demais campos vazios ("---").
+// Tolerante a falha: se o POST falhar, só registra warn no log narrativo
+// (a falha original já está em error.log, não queremos cascatear).
+async function postarErroPlanilha(numPasta, erro) {
+    const dadosErro = {
+        numPasta,
+        dataEmail: "---",
+        email: "---",
+        cnpj: "---",
+        razao: "---",
+        endereco: "---",
+        docCompleta: "---",
+        atividade: "---",
+        status: "ERRO",
+        confianca: "0",
+        motivo: (erro && erro.message) || "Erro desconhecido",
+    };
+
+    try {
+        const resp = await fetch(URL_PLANILHA, {
+            method: 'POST',
+            body: JSON.stringify(dadosErro),
+        });
+        if (resp.ok) {
+            gravarLog(`📤 [PLANILHA-ERRO] Pasta ${numPasta} reportada como ERRO na planilha.`);
+        } else {
+            gravarLog(`⚠️ [PLANILHA-ERRO] Falha HTTP ${resp.status} ao reportar pasta ${numPasta}.`);
+        }
+    } catch (err) {
+        gravarLog(`⚠️ [PLANILHA-ERRO] Falha ao reportar pasta ${numPasta}: ${err.message}`);
+    }
+}
+
 // Move log_processamento.txt e error.log da execução anterior para
 // data/archive/<base>_<timestamp>.<ext>. Roda como PRIMEIRA coisa, antes
 // de qualquer gravarLog/gravarErroFinal — caso contrário os logs novos
@@ -301,10 +335,11 @@ async function processarTriagem() {
         filaRetry.push(...aindaFalhando);
     }
 
-    // --- FALHAS DEFINITIVAS → error.log ---
+    // --- FALHAS DEFINITIVAS → error.log + planilha ---
     for (const item of filaRetry) {
         gravarErroFinal({ ...item.ultimoErro, tentativas: item.tentativaAtual });
         gravarLog(`❌ [FALHA DEFINITIVA] Pasta ${item.numPasta} apos ${item.tentativaAtual} tentativas: ${item.ultimoErro.message}`);
+        await postarErroPlanilha(item.numPasta, item.ultimoErro);
     }
     const contadorFalha = filaRetry.length;
 
