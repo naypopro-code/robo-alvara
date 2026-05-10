@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Bundled Node.js runtime
+node-v*-win-*/
+node-v*-linux-*/
+node-v*-darwin-*/
+
+# Logs
+*.log
+log_processamento.txt
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Secrets / credentials
+Chave_Robo_DVS.txt
+*.key
+*.pem
+.env
+.env.*
+
+# Generated document folders
+01_documentos_alvara/
+02__documentos_certidao_dispensa/
+03_documentos_certidao_isencao/
+04_documentos_licenca_transporte/
+
+# Timestamped run output folders (e.g. 2026-04-26-17-54-00)
+[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
