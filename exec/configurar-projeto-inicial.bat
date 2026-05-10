@@ -9,25 +9,24 @@ echo.
 echo Este script vai:
 echo   1) Baixar e extrair o Node.js bundled (se ainda nao existir)
 echo   2) Instalar as dependencias do projeto (npm install)
-echo   3) Criar config\config.json a partir do sample
-echo   4) Criar pastas necessarias (data\)
+echo   3) Criar pasta data\
+echo   4) Criar config\config.json a partir do sample
 echo.
 
 setlocal
-set "PROJECT_ROOT=%~dp0"
+pushd "%~dp0.."
+set "PROJECT_ROOT=%CD%"
 set "NODE_VERSION=v25.9.0"
 set "NODE_DIRNAME=node-%NODE_VERSION%-win-x64"
 set "NODE_ZIP=%NODE_DIRNAME%.zip"
 set "NODE_URL=https://nodejs.org/dist/%NODE_VERSION%/%NODE_ZIP%"
-set "NODE_DIR=%PROJECT_ROOT%%NODE_DIRNAME%"
+set "NODE_DIR=%PROJECT_ROOT%\%NODE_DIRNAME%"
 set "NODE_EXE=%NODE_DIR%\node.exe"
 set "NPM_CMD=%NODE_DIR%\npm.cmd"
 
-cd /d "%PROJECT_ROOT%"
-
 REM --- 1) Node bundled ---
 if exist "%NODE_EXE%" (
-    echo [1/4] Node ja presente em %NODE_DIRNAME%\ — pulando download.
+    echo [1/4] Node ja presente em %NODE_DIRNAME%\ - pulando download.
 ) else (
     echo [1/4] Baixando Node %NODE_VERSION% ...
     echo       %NODE_URL%
@@ -40,6 +39,7 @@ if exist "%NODE_EXE%" (
     )
     if errorlevel 1 (
         echo [ERRO] Falha ao baixar Node.
+        popd
         pause
         exit /b 1
     )
@@ -48,6 +48,7 @@ if exist "%NODE_EXE%" (
     powershell -NoProfile -Command "Expand-Archive -Path '%NODE_ZIP%' -DestinationPath '.' -Force"
     if errorlevel 1 (
         echo [ERRO] Falha ao extrair Node.
+        popd
         pause
         exit /b 1
     )
@@ -56,6 +57,7 @@ if exist "%NODE_EXE%" (
 
     if not exist "%NODE_EXE%" (
         echo [ERRO] node.exe nao foi encontrado em %NODE_DIR% apos extracao.
+        popd
         pause
         exit /b 1
     )
@@ -68,18 +70,33 @@ echo [2/4] Rodando npm install ...
 call "%NPM_CMD%" install
 if errorlevel 1 (
     echo [ERRO] npm install falhou.
+    popd
     pause
     exit /b 1
 )
 
-REM --- 3) e 4) Setup do projeto via script Node ---
+REM --- 3) Pasta data\ ---
 echo.
-echo [3/4 + 4/4] Configurando projeto (data\, config\config.json) ...
-"%NODE_EXE%" scripts\setup.js
-if errorlevel 1 (
-    echo [ERRO] Setup falhou.
-    pause
-    exit /b 1
+if exist "data\" (
+    echo [3/4] Pasta data\ ja existe.
+) else (
+    mkdir "data"
+    echo [3/4] Pasta data\ criada.
+)
+
+REM --- 4) config\config.json a partir do sample ---
+echo.
+if exist "config\config.json" (
+    echo [4/4] config\config.json ja existe - mantido.
+) else (
+    if not exist "config\config.sample.json" (
+        echo [ERRO] config\config.sample.json nao encontrado.
+        popd
+        pause
+        exit /b 1
+    )
+    copy /Y "config\config.sample.json" "config\config.json" >nul
+    echo [4/4] config\config.json criado a partir do sample.
 )
 
 echo.
@@ -90,7 +107,8 @@ echo.
 echo PROXIMO PASSO:
 echo   - Edite config\config.json com:
 echo       CHAVE_GEMINI, URL_PLANILHA e PASTA_RAIZ
-echo   - Depois execute: executar.bat
+echo   - Depois execute: exec\executar.bat
 echo.
+popd
 pause
 endlocal
