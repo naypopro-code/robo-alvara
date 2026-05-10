@@ -1,0 +1,11 @@
+{
+    "_comentario": "Copie este arquivo para config.json (no mesmo diretorio) e preencha os valores. config.json esta no .gitignore.",
+
+    "CHAVE_GEMINI": "",
+    "URL_PLANILHA": "",
+    "PASTA_RAIZ": "data/01_documentos_alvara",
+
+    "CAMINHO_PROMPT": "config/prompt.txt",
+    "CAMINHO_LOG": "data/log_processamento.txt",
+    "CAMINHO_ERRO_LOG": "data/error.log"
+}
