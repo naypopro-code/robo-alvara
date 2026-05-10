@@ -3,7 +3,7 @@
 
     "CHAVE_GEMINI": "",
     "URL_PLANILHA": "",
-    "PASTA_RAIZ": "data/01_documentos_alvara",
+    "PASTA_RAIZ": "C://documentos/01_documentos_alvara",
 
     "CAMINHO_PROMPT": "config/prompt.txt",
     "CAMINHO_LOG": "data/log_processamento.txt",
