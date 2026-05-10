@@ -7,5 +7,10 @@
 
     "CAMINHO_PROMPT": "config/prompt.txt",
     "CAMINHO_LOG": "data/log_processamento.txt",
-    "CAMINHO_ERRO_LOG": "data/error.log"
+    "CAMINHO_ERRO_LOG": "data/error.log",
+
+    "MODELO_GEMINI": "gemini-2.5-flash",
+    "INTERVALO_PASTAS_MS": 15000,
+    "RETRY_TENTATIVAS": 3,
+    "RETRY_INTERVALO_MS": 5000
 }
