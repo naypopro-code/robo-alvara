@@ -104,6 +104,20 @@ npm run teste:planilha     :: src\testePlanilha.js
   ```
   Stages possíveis: `startup`, `missing_files`, `gemini_call`, `parse_response`, `planilha_post`, `planilha_http`, `unknown`.
 
+### Rotação automática (archive)
+
+A cada execução de `main.js`, **antes** de qualquer log novo ser escrito, os arquivos
+`log_processamento.txt` e `error.log` da execução anterior (se existirem e não estiverem vazios)
+são movidos para `data\archive\` com timestamp UTC no nome:
+
+```
+data\archive\log_processamento_2026-05-10_17-09-34.txt
+data\archive\error_2026-05-10_17-09-34.log
+```
+
+Cada execução começa com logs limpos. O histórico fica em `data\archive\`, que também está
+no `.gitignore`. Não há limite de retenção — se quiser podar, apague manualmente.
+
 ## Notas de segurança
 
 - `src\main.js`, `src\lista.js` e `src\testePlanilha.js` leem `CHAVE_GEMINI` e `URL_PLANILHA` de `config\config.json`. Nenhum segredo fica em código commitado.

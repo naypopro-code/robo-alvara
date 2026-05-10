@@ -48,6 +48,36 @@ function gravarLog(mensagem) {
     fs.appendFileSync(CAMINHO_LOG, `[${timestamp}] ${mensagem}\n`);
 }
 
+// Move log_processamento.txt e error.log da execução anterior para
+// data/archive/<base>_<timestamp>.<ext>. Roda como PRIMEIRA coisa, antes
+// de qualquer gravarLog/gravarErroFinal — caso contrário os logs novos
+// se misturariam aos antigos.
+function arquivarLogsAnteriores() {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+    const alvos = [CAMINHO_LOG, CAMINHO_ERRO_LOG];
+
+    for (const src of alvos) {
+        if (!fs.existsSync(src)) continue;
+        try {
+            if (fs.statSync(src).size === 0) continue;
+        } catch (_) {
+            continue;
+        }
+        const archiveDir = path.join(path.dirname(src), 'archive');
+        try {
+            fs.mkdirSync(archiveDir, { recursive: true });
+            const ext = path.extname(src);
+            const base = path.basename(src, ext);
+            const dst = path.join(archiveDir, `${base}_${ts}${ext}`);
+            fs.renameSync(src, dst);
+            console.log(`📦 [ARCHIVE] ${path.basename(src)} -> archive/${path.basename(dst)}`);
+        } catch (err) {
+            // Não interrompe a execução se o archive falhar — apenas avisa.
+            console.warn(`⚠️ [ARCHIVE] Falha ao arquivar ${src}: ${err.message}`);
+        }
+    }
+}
+
 // Gravado apenas APÓS esgotar todas as tentativas de retry. Tudo aqui é falha definitiva.
 function gravarErroFinal({ numPasta, stage, message, extra, tentativas }) {
     const entry = {
@@ -181,6 +211,8 @@ async function processarPasta(numPasta, caminhoPasta, promptTemplate) {
 }
 
 async function processarTriagem() {
+    arquivarLogsAnteriores();
+
     const inicioMsg = `🚀 [SISTEMA] Iniciando Triagem BDD EAA-DVS (modelo=${MODELO_GEMINI}, intervalo=${INTERVALO_PASTAS_MS}ms, retry=${RETRY_TENTATIVAS}x@${RETRY_INTERVALO_MS}ms)`;
     console.log(inicioMsg);
     gravarLog(inicioMsg);
