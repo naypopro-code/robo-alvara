@@ -92,6 +92,6 @@ npm run teste:planilha     :: src\testePlanilha.js
 
 ## Notas de segurança
 
-- `src\lista.js` ainda tem a chave Gemini **hardcoded** (igual à de `config.json`). É um utilitário de diagnóstico.
+- Tanto `src\main.js` quanto `src\lista.js` leem a `CHAVE_GEMINI` de `config\config.json`. Nenhum segredo fica em código commitado.
 - `src\testePlanilha.js` tem uma URL de Apps Script **diferente** (endpoint de teste); não compartilha a `URL_PLANILHA` da config.
 - Nunca commite `config\config.json`, `Chave_Robo_DVS.txt` ou qualquer conteúdo de `data\`.
