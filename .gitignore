@@ -5,13 +5,16 @@ node_modules/
 node-v*-win-*/
 node-v*-linux-*/
 node-v*-darwin-*/
+node-v*.zip
+node-v*.tar.gz
 
 # Logs
 *.log
-log_processamento.txt
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+data/log_processamento.txt
+data/error.log
 
 # Secrets / credentials
 Chave_Robo_DVS.txt
@@ -20,14 +23,13 @@ Chave_Robo_DVS.txt
 .env
 .env.*
 
-# Generated document folders
-01_documentos_alvara/
-02__documentos_certidao_dispensa/
-03_documentos_certidao_isencao/
-04_documentos_licenca_transporte/
+# Local config (real values) — keep config/config.sample.json committed
+config/config.json
 
-# Timestamped run output folders (e.g. 2026-04-26-17-54-00)
-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+# Run data: PDFs e saidas geradas. Nada em data/ deve ser commitado,
+# exceto este .gitkeep que mantem a pasta no repo.
+data/*
+!data/.gitkeep
 
 # OS
 .DS_Store
@@ -39,3 +41,5 @@ desktop.ini
 .idea/
 *.swp
 *.swo
+
+data/
