@@ -92,6 +92,5 @@ npm run teste:planilha     :: src\testePlanilha.js
 
 ## Notas de segurança
 
-- Tanto `src\main.js` quanto `src\lista.js` leem a `CHAVE_GEMINI` de `config\config.json`. Nenhum segredo fica em código commitado.
-- `src\testePlanilha.js` tem uma URL de Apps Script **diferente** (endpoint de teste); não compartilha a `URL_PLANILHA` da config.
+- `src\main.js`, `src\lista.js` e `src\testePlanilha.js` leem `CHAVE_GEMINI` e `URL_PLANILHA` de `config\config.json`. Nenhum segredo fica em código commitado.
 - Nunca commite `config\config.json`, `Chave_Robo_DVS.txt` ou qualquer conteúdo de `data\`.
