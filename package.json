@@ -8,7 +8,9 @@
     "start": "node src/main.js",
     "triagem": "node src/main.js",
     "lista": "node src/lista.js",
-    "teste:planilha": "node src/testePlanilha.js"
+    "teste:planilha": "node src/testePlanilha.js",
+    "setup": "node scripts/setup.js",
+    "postinstall": "node scripts/setup.js"
   },
   "dependencies": {
     "@google/generative-ai": "latest"
