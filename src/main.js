@@ -48,23 +48,10 @@ function gravarLog(mensagem) {
     fs.appendFileSync(CAMINHO_LOG, `[${timestamp}] ${mensagem}\n`);
 }
 
-// Reporta na planilha que uma pasta esgotou todas as tentativas.
-// status="ERRO", motivo=mensagem do ultimo erro. Demais campos vazios ("---").
-// Tolerante a falha: se o POST falhar, só registra warn no log narrativo
-// (a falha original já está em error.log, não queremos cascatear).
 async function postarErroPlanilha(numPasta, erro) {
     const dadosErro = {
-        numPasta,
-        dataEmail: "---",
-        email: "---",
-        cnpj: "---",
-        razao: "---",
-        endereco: "---",
-        docCompleta: "---",
-        atividade: "---",
-        status: "ERRO",
-        confianca: "0",
-        motivo: (erro && erro.message) || "Erro desconhecido",
+        numPasta: numPasta,
+        respostaIA: `${numPasta}|---|---|---|---|---|---|---|ERRO|0|${(erro && erro.message) || "Erro desconhecido"}|---|---|---|---|---`
     };
 
     try {
@@ -82,10 +69,6 @@ async function postarErroPlanilha(numPasta, erro) {
     }
 }
 
-// Move log_processamento.txt e error.log da execução anterior para
-// data/archive/<base>_<timestamp>.<ext>. Roda como PRIMEIRA coisa, antes
-// de qualquer gravarLog/gravarErroFinal — caso contrário os logs novos
-// se misturariam aos antigos.
 function arquivarLogsAnteriores() {
     const ts = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
     const alvos = [CAMINHO_LOG, CAMINHO_ERRO_LOG];
@@ -106,13 +89,11 @@ function arquivarLogsAnteriores() {
             fs.renameSync(src, dst);
             console.log(`📦 [ARCHIVE] ${path.basename(src)} -> archive/${path.basename(dst)}`);
         } catch (err) {
-            // Não interrompe a execução se o archive falhar — apenas avisa.
             console.warn(`⚠️ [ARCHIVE] Falha ao arquivar ${src}: ${err.message}`);
         }
     }
 }
 
-// Gravado apenas APÓS esgotar todas as tentativas de retry. Tudo aqui é falha definitiva.
 function gravarErroFinal({ numPasta, stage, message, extra, tentativas }) {
     const entry = {
         timestamp: new Date().toISOString(),
@@ -125,9 +106,6 @@ function gravarErroFinal({ numPasta, stage, message, extra, tentativas }) {
     fs.appendFileSync(CAMINHO_ERRO_LOG, JSON.stringify(entry) + '\n');
 }
 
-// Processa uma pasta completa. Retorna:
-//   { sucesso: true, status }                              em caso de sucesso
-//   { sucesso: false, erro: { numPasta, stage, message, extra } } em caso de falha
 async function processarPasta(numPasta, caminhoPasta, promptTemplate) {
     const nomeArquivoEmail = "email.pdf";
     const nomeArquivoDocBasico = "docbasico.pdf";
@@ -199,33 +177,29 @@ async function processarPasta(numPasta, caminhoPasta, promptTemplate) {
         };
     }
 
-    const partes = linhas[linhas.length - 1].split('|').map(t => t.trim());
-    const dadosParaPlanilha = {
+    const stringFinalIA = linhas[linhas.length - 1].trim();
+
+    const payloadParaPlanilha = {
         numPasta: numPasta,
-        dataEmail: partes[0] || "---",
-        email: partes[1] || "---",
-        cnpj: partes[2] || "---",
-        razao: partes[3] || "---",
-        endereco: partes[4] || "---",
-        docCompleta: partes[5] || "---",
-        atividade: partes[6] || "---",
-        status: partes[7] || "Verificar",
-        confianca: partes[8] || "0",
-        motivo: partes[9] || "Não especificado pela IA",
+        respostaIA: stringFinalIA
     };
 
-    gravarLog(`Resultado Pasta ${numPasta}: Status=${dadosParaPlanilha.status} | Confiança=${dadosParaPlanilha.confianca}% | Motivo=${dadosParaPlanilha.motivo}`);
+    // Extrai o status de forma simples apenas para exibição no log narrativo local do terminal
+    const partesLog = stringFinalIA.split('|');
+    const statusLog = partesLog[8] || "Processado";
+
+    gravarLog(`Resultado Pasta ${numPasta}: Status=${statusLog}`);
 
     let responsePlanilha;
     try {
         responsePlanilha = await fetch(URL_PLANILHA, {
             method: 'POST',
-            body: JSON.stringify(dadosParaPlanilha),
+            body: JSON.stringify(payloadParaPlanilha),
         });
     } catch (err) {
         return {
             sucesso: false,
-            erro: { numPasta, stage: 'planilha_post', message: err.message, extra: { dados: dadosParaPlanilha } },
+            erro: { numPasta, stage: 'planilha_post', message: err.message, extra: { dados: payloadParaPlanilha } },
         };
     }
 
@@ -236,12 +210,12 @@ async function processarPasta(numPasta, caminhoPasta, promptTemplate) {
                 numPasta,
                 stage: 'planilha_http',
                 message: `Status HTTP ${responsePlanilha.status}`,
-                extra: { httpStatus: responsePlanilha.status, dados: dadosParaPlanilha },
+                extra: { httpStatus: responsePlanilha.status, dados: payloadParaPlanilha },
             },
         };
     }
 
-    return { sucesso: true, status: dadosParaPlanilha.status };
+    return { sucesso: true, status: statusLog };
 }
 
 async function processarTriagem() {
@@ -270,7 +244,7 @@ async function processarTriagem() {
     const promptTemplate = fs.readFileSync(CAMINHO_PROMPT, 'utf8');
 
     let contadorSucesso = 0;
-    const filaRetry = []; // { numPasta, caminhoPasta, tentativaAtual, ultimoErro }
+    const filaRetry = [];
 
     // --- 1ª PASSADA ---
     for (const numPasta of pastas) {
@@ -313,7 +287,7 @@ async function processarTriagem() {
             console.log(`\n--- 🔁 RETRY ${rodada}: Pasta ${item.numPasta} ---`);
             gravarLog(`Retry ${rodada} da Pasta: ${item.numPasta}`);
 
-            const resultado = await processarPasta(item.numPasta, item.caminhoPasta, promptTemplate);
+            const resultado = await processarPasta(item.numPasta, item.caminioPasta, promptTemplate);
             if (resultado.sucesso) {
                 const ok = `✅ [RETRY ${rodada}] Pasta ${item.numPasta} OK. Status: ${resultado.status}`;
                 console.log(ok);
@@ -335,7 +309,7 @@ async function processarTriagem() {
         filaRetry.push(...aindaFalhando);
     }
 
-    // --- FALHAS DEFINITIVAS → error.log + planilha ---
+    // --- FALHAS DEFINITIVAS ---
     for (const item of filaRetry) {
         gravarErroFinal({ ...item.ultimoErro, tentativas: item.tentativaAtual });
         gravarLog(`❌ [FALHA DEFINITIVA] Pasta ${item.numPasta} apos ${item.tentativaAtual} tentativas: ${item.ultimoErro.message}`);
