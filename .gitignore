@@ -8,6 +8,10 @@ node-v*-darwin-*/
 node-v*.zip
 node-v*.tar.gz
 
+# Bundled Git portable (MinGit)
+MinGit-*/
+MinGit-*.zip
+
 # Logs
 *.log
 npm-debug.log*

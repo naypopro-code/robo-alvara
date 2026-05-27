@@ -8,9 +8,10 @@ echo =======================================================
 echo.
 echo Este script vai:
 echo   1) Baixar e extrair o Node.js bundled (se ainda nao existir)
-echo   2) Instalar as dependencias do projeto (npm install)
-echo   3) Criar pasta data\
-echo   4) Criar config\config.json a partir do sample
+echo   2) Baixar e extrair o Git portable (se ainda nao existir)
+echo   3) Instalar as dependencias do projeto (npm install)
+echo   4) Criar pasta data\
+echo   5) Criar config\config.json a partir do sample
 echo.
 
 setlocal
@@ -26,9 +27,9 @@ set "NPM_CMD=%NODE_DIR%\npm.cmd"
 
 REM --- 1) Node bundled ---
 if exist "%NODE_EXE%" (
-    echo [1/4] Node ja presente em %NODE_DIRNAME%\ - pulando download.
+    echo [1/5] Node ja presente em %NODE_DIRNAME%\ - pulando download.
 ) else (
-    echo [1/4] Baixando Node %NODE_VERSION% ...
+    echo [1/5] Baixando Node %NODE_VERSION% ...
     echo       %NODE_URL%
     where curl >nul 2>nul
     if %ERRORLEVEL%==0 (
@@ -44,7 +45,7 @@ if exist "%NODE_EXE%" (
         exit /b 1
     )
 
-    echo [1/4] Extraindo %NODE_ZIP% ...
+    echo [1/5] Extraindo %NODE_ZIP% ...
     powershell -NoProfile -Command "Expand-Archive -Path '%NODE_ZIP%' -DestinationPath '.' -Force"
     if errorlevel 1 (
         echo [ERRO] Falha ao extrair Node.
@@ -61,12 +62,22 @@ if exist "%NODE_EXE%" (
         pause
         exit /b 1
     )
-    echo [1/4] Node instalado em %NODE_DIRNAME%\
+    echo [1/5] Node instalado em %NODE_DIRNAME%\
 )
 
-REM --- 2) npm install ---
+REM --- 2) Git portable ---
 echo.
-echo [2/4] Rodando npm install ...
+call "%~dp0baixar-git.bat"
+if errorlevel 1 (
+    echo [ERRO] Falha ao instalar Git portable.
+    popd
+    pause
+    exit /b 1
+)
+
+REM --- 3) npm install ---
+echo.
+echo [3/5] Rodando npm install ...
 call "%NPM_CMD%" install
 if errorlevel 1 (
     echo [ERRO] npm install falhou.
@@ -75,19 +86,19 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM --- 3) Pasta data\ ---
+REM --- 4) Pasta data\ ---
 echo.
 if exist "data\" (
-    echo [3/4] Pasta data\ ja existe.
+    echo [4/5] Pasta data\ ja existe.
 ) else (
     mkdir "data"
-    echo [3/4] Pasta data\ criada.
+    echo [4/5] Pasta data\ criada.
 )
 
-REM --- 4) config\config.json a partir do sample ---
+REM --- 5) config\config.json a partir do sample ---
 echo.
 if exist "config\config.json" (
-    echo [4/4] config\config.json ja existe - mantido.
+    echo [5/5] config\config.json ja existe - mantido.
 ) else (
     if not exist "config\config.sample.json" (
         echo [ERRO] config\config.sample.json nao encontrado.
@@ -96,7 +107,7 @@ if exist "config\config.json" (
         exit /b 1
     )
     copy /Y "config\config.sample.json" "config\config.json" >nul
-    echo [4/4] config\config.json criado a partir do sample.
+    echo [5/5] config\config.json criado a partir do sample.
 )
 
 echo.
