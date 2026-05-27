@@ -287,7 +287,7 @@ async function processarTriagem() {
             console.log(`\n--- 🔁 RETRY ${rodada}: Pasta ${item.numPasta} ---`);
             gravarLog(`Retry ${rodada} da Pasta: ${item.numPasta}`);
 
-            const resultado = await processarPasta(item.numPasta, item.caminioPasta, promptTemplate);
+            const resultado = await processarPasta(item.numPasta, item.caminhoPasta, promptTemplate);
             if (resultado.sucesso) {
                 const ok = `✅ [RETRY ${rodada}] Pasta ${item.numPasta} OK. Status: ${resultado.status}`;
                 console.log(ok);
