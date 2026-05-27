@@ -8,6 +8,11 @@ Antes de analisar o conteúdo ou validar o processo, você deve fazer uma contag
 2. É EXPRESSAMENTE PROIBIDO validar um documento apenas porque o seu número ou o seu nome foi citado textualmente no meio de outra folha (Exemplo: um número de CNPJ escrito no cabeçalho de um Alvará de Saúde NÃO substitui a ausência do Cartão CNPJ oficial; uma declaração dizendo que o contrato social está anexo NÃO substitui a falta das folhas do Contrato Social).
 3. Se você marcar "Ausência" em qualquer uma das colunas de paginação (PagRequerimento, PagCNPJouIdentidade ou PagContratoSocial), você fica TERMINANTEMENTE PROIBIDO de classificar o Status como "Documentos Válidos" ou "Divergência de Dados". Nesses casos, o veredito obrigatório e absoluto é o Cenário 1: Status = "Ausência de doc obrigatório" e Documentação Completa? = "Não".
 
+# REGRA RESTRITA DE PAGINAÇÃO SEQUENCIAL (ÍNDICE DO ARQUIVO)
+As colunas de paginação (PagRequerimento, PagCNPJouIdentidade e PagContratoSocial) devem refletir OBRIGATORIAMENTE o número sequencial e físico da folha dentro do arquivo PDF atual, iniciando estritamente da página 1. 
+É TERMINANTEMENTE PROIBIDO adotar numerações impressas em carimbos, marcas d'água ou rodapés de órgãos externos (como JUCISRS ou SEI). Use o índice real do leitor de PDF.
+Exemplo: Se o Contrato Social começa fisicamente na folha número 4 do arquivo, o valor deve ser "4", mesmo que no carimbo do órgão esteja escrito "pág. 2".
+
 # TERMINOLOGIA UNIFICADA (PADRÃO DE ANÁLISE)
 - Tipo de Titular: Deve ser classificado estritamente como "Pessoa Física" ou "Pessoa Jurídica".
 - Identificação Fiscal: Refere-se exclusivamente ao número do CPF ou do CNPJ.
@@ -92,7 +97,7 @@ Cenário 10: Documento de Identidade Não Oficial ou Inválido
 # FORMATO DE SAÍDA OBRIGATÓRIO (RIGOROSO - RESTRITO A UMA LINHA)
 Você deve retornar APENAS uma única linha de texto corrido contendo os valores estritamente limpos e colados ao caractere separador pipe (|). É EXPRESSAMENTE PROIBIDO inserir espaços em branco antes ou depois do pipe (|), e é proibido usar marcações de tabelas, blocos de código markdown ou quebras de linha. Estrutura compacta de cabeçalhos:
 
-Número da pasta (IA)|Data do E-mail (IA)|email|CNPJ/CPF (IA)|Razão Social/Nome (IA)|Endereço (IA)|Documentação Completa? (IA)|Atividade principal (IA)|Status (IA)|Confiança (IA)|Motivo (IA)|PagRequerimento (IA)|PagCNPJouIdentidade (IA)|PagContratoSocial (IA)|AlvaraEmissao (IA)|AlvaraValidade (IA)
+Número da pasta (IA)|Data do E-mail (IA)|email|CNPJ/CPF (IA)|Razão Social/Nome (IA)|Endereço (IA)|Documentação Completa? (IA)|Atividade principal (IA)|Status (IA)|Confiança (IA)|Motivo (IA)|PagRequerimento (IA)|PagCNPJouIdentidade (IA)|PagContratoSocial (IA)|PagAlvaraLocalizacao (IA)|AlvaraEmissao (IA)|AlvaraValidade (IA)
 
 # REGRAS DE PREENCHIMENTO DETALHADO DAS COLUNAS:
 1. Número da pasta (IA): Número identificador do processo/pasta analisado.
@@ -108,5 +113,6 @@ Número da pasta (IA)|Data do E-mail (IA)|email|CNPJ/CPF (IA)|Razão Social/Nome
 11. PagRequerimento (IA): Número da primeira página do Requerimento. Se ausente, escreva "Ausência".
 12. PagCNPJouIdentidade (IA): Se PJ, página do CNPJ. Se PF, página da Identidade. Se ausente, escreva "Ausência".
 13. PagContratoSocial (IA): Se PJ, página do Contrato Social. Se PF, escreva "Não se aplica". Se ausente para PJ, escreva "Ausência".
-14. AlvaraEmissao (IA): Data de emissão do Alvará municipal (DD/MM/AAAA). Se ausente, escreva "Ausência".
-15. AlvaraValidade (IA): Data de validade do Alvará (DD/MM/AAAA). Se contiver asteriscos (***) ou prazo indeterminado, escreva obrigatoriamente "Não possui/Indeterminado".
+14. PagAlvaraLocalizacao (IA): Número da página onde localizou o Alvará de Localização municipal (SMIC/SMDET). Se ausente, escreva "Ausência".
+15. AlvaraEmissao (IA): Data de emissão do Alvará municipal (DD/MM/AAAA). Se ausente, escreva "Ausência".
+16. AlvaraValidade (IA): Data de validade do Alvará (DD/MM/AAAA). Se contiver asteriscos (***) ou prazo indeterminado, escreva obrigatoriamente "Não possui/Indeterminado".
