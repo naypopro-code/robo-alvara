@@ -8,10 +8,13 @@ Antes de analisar o conteúdo ou validar o processo, você deve fazer uma contag
 2. É EXPRESSAMENTE PROIBIDO validar um documento apenas porque o seu número ou o seu nome foi citado textualmente no meio de outra folha (Exemplo: um número de CNPJ escrito no cabeçalho de um Alvará de Saúde NÃO substitui a ausência do Cartão CNPJ oficial; uma declaração dizendo que o contrato social está anexo NÃO substitui a falta das folhas do Contrato Social).
 3. Se você marcar "Ausência" em qualquer uma das colunas de paginação (PagRequerimento, PagCNPJouIdentidade ou PagContratoSocial), você fica TERMINANTEMENTE PROIBIDO de classificar o Status como "Documentos Válidos" ou "Divergência de Dados". Nesses casos, o veredito obrigatório e absoluto é o Cenário 1: Status = "Ausência de doc obrigatório" e Documentação Completa? = "Não".
 
-# REGRA RESTRITA DE PAGINAÇÃO SEQUENCIAL (ÍNDICE DO ARQUIVO)
-As colunas de paginação (PagRequerimento, PagCNPJouIdentidade e PagContratoSocial) devem refletir OBRIGATORIAMENTE o número sequencial e físico da folha dentro do arquivo PDF atual, iniciando estritamente da página 1. 
-É TERMINANTEMENTE PROIBIDO adotar numerações impressas em carimbos, marcas d'água ou rodapés de órgãos externos (como JUCISRS ou SEI). Use o índice real do leitor de PDF.
-Exemplo: Se o Contrato Social começa fisicamente na folha número 4 do arquivo, o valor deve ser "4", mesmo que no carimbo do órgão esteja escrito "pág. 2".
+# REGRA RESTRITA DE PAGINAÇÃO SEQUENCIAL (CONTADOR ABSOLUTO)
+As colunas de paginação (PagRequerimento, PagCNPJouIdentidade, PagContratoSocial e PagAlvaraLocalizacao) devem refletir EXCLUSIVAMENTE o número da folha física dentro do arquivo PDF, em uma contagem linear que começa obrigatoriamente em 1 para a primeira página do arquivo.
+
+Para evitar erros de leitura, siga rigorosamente estas três diretrizes abstratas de contagem:
+1. ISOLE OS NÚMEROS IMPRESSOS: É terminantemente proibido extrair o número da página a partir de carimbos de órgãos (como JUCISRS), marcas d'água, rodapés ou textos internos do documento. Ignore textos como "pág. 1", "folha 5" ou "página 2 de 10" escritos nas folhas.
+2. ALINHAMENTO COM O LEITOR DE PDF: Considere que você está lendo o documento através de um leitor de PDF digital. Se o documento é a quarta folha que você visualiza desde o início do arquivo, o número dele é "4", mesmo que haja um carimbo do Estado dizendo "pág. 1".
+3. TRATAMENTO DE CAPAS E DOCUMENTOS DE TRANSMISSÃO: Folhas que servem apenas como capa de processo, termos de autenticação ou comprovantes de assinatura eletrônica contam na numeração física do arquivo, mas não devem ser marcadas como a página inicial do documento técnico.
 
 # TERMINOLOGIA UNIFICADA (PADRÃO DE ANÁLISE)
 - Tipo de Titular: Deve ser classificado estritamente como "Pessoa Física" ou "Pessoa Jurídica".
