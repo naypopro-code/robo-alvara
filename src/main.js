@@ -24,13 +24,21 @@ try {
 }
 
 const resolverCaminho = (p) => path.isAbsolute(p) ? p : path.join(PROJECT_ROOT, p);
+const obterCaminhoConfig = (campo) => {
+    const valor = cfg[campo];
+    if (typeof valor !== 'string' || valor.trim() === '') {
+        console.error(`❌ [ERRO] Campo obrigatório ausente/inválido no config.json: ${campo}`);
+        process.exit(1);
+    }
+    return resolverCaminho(valor);
+};
 
 const CHAVE_GEMINI = cfg.CHAVE_GEMINI;
 const URL_PLANILHA = cfg.URL_PLANILHA;
-const PASTA_RAIZ = resolverCaminho(cfg.PASTA_RAIZ);
-const CAMINHO_PROMPT = resolverCaminho(cfg.CAMINHO_PROMPT);
-const CAMINHO_LOG = resolverCaminho(cfg.CAMINHO_LOG);
-const CAMINHO_ERRO_LOG = resolverCaminho(cfg.CAMINHO_ERRO_LOG);
+const PASTA_RAIZ = obterCaminhoConfig('PASTA_RAIZ');
+const CAMINHO_PROMPT = obterCaminhoConfig('CAMINHO_PROMPT');
+const CAMINHO_LOG = obterCaminhoConfig('CAMINHO_LOG');
+const CAMINHO_ERRO_LOG = obterCaminhoConfig('CAMINHO_ERRO_LOG');
 
 const MODELO_GEMINI = cfg.MODELO_GEMINI || "gemini-2.5-flash";
 const INTERVALO_PASTAS_MS = Number.isFinite(cfg.INTERVALO_PASTAS_MS) ? cfg.INTERVALO_PASTAS_MS : 15000;
@@ -106,15 +114,90 @@ function gravarErroFinal({ numPasta, stage, message, extra, tentativas }) {
     fs.appendFileSync(CAMINHO_ERRO_LOG, JSON.stringify(entry) + '\n');
 }
 
+function montarCaminhoPasta(numPasta) {
+    return path.join(PASTA_RAIZ, String(numPasta));
+}
+
+function validarCaminhoPasta(caminhoPasta) {
+    if (typeof caminhoPasta !== 'string' || caminhoPasta.trim() === '') {
+        return {
+            ok: false,
+            erro: {
+                stage: 'invalid_path',
+                semRetry: true,
+                message: `Caminho de pasta inválido: ${String(caminhoPasta)}`,
+                extra: { caminhoPasta: caminhoPasta ?? null },
+            },
+        };
+    }
+
+    if (!fs.existsSync(caminhoPasta)) {
+        return {
+            ok: false,
+            erro: {
+                stage: 'invalid_path',
+                semRetry: true,
+                message: `Pasta não encontrada: ${caminhoPasta}`,
+                extra: { caminhoPasta },
+            },
+        };
+    }
+
+    try {
+        if (!fs.lstatSync(caminhoPasta).isDirectory()) {
+            return {
+                ok: false,
+                erro: {
+                    stage: 'invalid_path',
+                    semRetry: true,
+                    message: `Caminho não é diretório: ${caminhoPasta}`,
+                    extra: { caminhoPasta },
+                },
+            };
+        }
+    } catch (e) {
+        return {
+            ok: false,
+            erro: {
+                stage: 'invalid_path',
+                semRetry: true,
+                message: `Falha ao validar caminho da pasta: ${e.message}`,
+                extra: { caminhoPasta },
+            },
+        };
+    }
+
+    return { ok: true };
+}
+
 async function processarPasta(numPasta, caminhoPasta, promptTemplate) {
     const nomeArquivoEmail = "email.pdf";
     const nomeArquivoDocBasico = "docbasico.pdf";
+
+    const validacao = validarCaminhoPasta(caminhoPasta);
+    if (!validacao.ok) {
+        return {
+            sucesso: false,
+            erro: {
+                numPasta,
+                ...validacao.erro,
+            },
+        };
+    }
 
     let arquivos;
     try {
         arquivos = fs.readdirSync(caminhoPasta);
     } catch (e) {
-        return { sucesso: false, erro: { numPasta, stage: 'unknown', message: `Falha ao ler pasta: ${e.message}` } };
+        return {
+            sucesso: false,
+            erro: {
+                numPasta,
+                stage: 'read_dir',
+                message: `Falha ao ler pasta: ${e.message}`,
+                extra: { caminhoPasta },
+            },
+        };
     }
 
     const temEmail = arquivos.some(f => f.toLowerCase() === nomeArquivoEmail);
@@ -245,28 +328,37 @@ async function processarTriagem() {
 
     let contadorSucesso = 0;
     const filaRetry = [];
+    const filaErroDefinitivo = [];
+
+    function encaminharFalha({ numPasta, tentativaAtual, ultimoErro }) {
+        if (ultimoErro && ultimoErro.semRetry) {
+            const msg = `❌ [CAMINHO INVÁLIDO] Pasta ${numPasta} | caminho=${(ultimoErro.extra && ultimoErro.extra.caminhoPasta) || '---'} | ${ultimoErro.message}`;
+            console.log(msg);
+            gravarLog(msg);
+            filaErroDefinitivo.push({ numPasta, tentativaAtual, ultimoErro });
+            return;
+        }
+
+        filaRetry.push({ numPasta, tentativaAtual, ultimoErro });
+    }
 
     // --- 1ª PASSADA ---
     for (const numPasta of pastas) {
-        const caminhoPasta = path.join(PASTA_RAIZ, numPasta);
+        const caminhoPasta = montarCaminhoPasta(numPasta);
 
         console.log(`\n--- 🔎 AUDITORIA BDD: Pasta ${numPasta} ---`);
-        gravarLog(`Iniciando análise da Pasta: ${numPasta}`);
+        gravarLog(`Iniciando análise da Pasta: ${numPasta} | caminho=${caminhoPasta}`);
+        console.log(`📂 [CAMINHO] Pasta ${numPasta} | caminho=${caminhoPasta}`);
 
         const resultado = await processarPasta(numPasta, caminhoPasta, promptTemplate);
         if (resultado.sucesso) {
             console.log(`✅ [SUCESSO] Status: ${resultado.status}`);
             contadorSucesso++;
         } else {
-            const aviso = `⚠️ [WARN] Pasta ${numPasta} falhou (${resultado.erro.stage}): ${resultado.erro.message}. Será retentada.`;
+            const aviso = `⚠️ [WARN] Pasta ${numPasta} falhou (${resultado.erro.stage}): ${resultado.erro.message}.`;
             console.log(aviso);
             gravarLog(aviso);
-            filaRetry.push({
-                numPasta,
-                caminhoPasta,
-                tentativaAtual: 1,
-                ultimoErro: resultado.erro,
-            });
+            encaminharFalha({ numPasta, tentativaAtual: 1, ultimoErro: resultado.erro });
         }
 
         await sleep(INTERVALO_PASTAS_MS);
@@ -284,10 +376,12 @@ async function processarTriagem() {
 
         const aindaFalhando = [];
         for (const item of filaRetry) {
+            const caminhoPasta = montarCaminhoPasta(item.numPasta);
             console.log(`\n--- 🔁 RETRY ${rodada}: Pasta ${item.numPasta} ---`);
-            gravarLog(`Retry ${rodada} da Pasta: ${item.numPasta}`);
+            gravarLog(`Retry ${rodada} da Pasta: ${item.numPasta} | caminho=${caminhoPasta}`);
+            console.log(`📂 [CAMINHO] Pasta ${item.numPasta} | caminho=${caminhoPasta}`);
 
-            const resultado = await processarPasta(item.numPasta, item.caminhoPasta, promptTemplate);
+            const resultado = await processarPasta(item.numPasta, caminhoPasta, promptTemplate);
             if (resultado.sucesso) {
                 const ok = `✅ [RETRY ${rodada}] Pasta ${item.numPasta} OK. Status: ${resultado.status}`;
                 console.log(ok);
@@ -299,7 +393,15 @@ async function processarTriagem() {
                 const aviso = `⚠️ [WARN RETRY ${rodada}] Pasta ${item.numPasta} ainda falhou (${resultado.erro.stage}): ${resultado.erro.message}.`;
                 console.log(aviso);
                 gravarLog(aviso);
-                aindaFalhando.push(item);
+                if (resultado.erro && resultado.erro.semRetry) {
+                    encaminharFalha({
+                        numPasta: item.numPasta,
+                        tentativaAtual: item.tentativaAtual,
+                        ultimoErro: resultado.erro,
+                    });
+                } else {
+                    aindaFalhando.push(item);
+                }
             }
 
             await sleep(INTERVALO_PASTAS_MS);
@@ -310,12 +412,13 @@ async function processarTriagem() {
     }
 
     // --- FALHAS DEFINITIVAS ---
-    for (const item of filaRetry) {
+    const filaFalhasFinais = [...filaErroDefinitivo, ...filaRetry];
+    for (const item of filaFalhasFinais) {
         gravarErroFinal({ ...item.ultimoErro, tentativas: item.tentativaAtual });
         gravarLog(`❌ [FALHA DEFINITIVA] Pasta ${item.numPasta} apos ${item.tentativaAtual} tentativas: ${item.ultimoErro.message}`);
         await postarErroPlanilha(item.numPasta, item.ultimoErro);
     }
-    const contadorFalha = filaRetry.length;
+    const contadorFalha = filaFalhasFinais.length;
 
     const fimMsg = `🏁 Triagem concluída. Sucesso: ${contadorSucesso} | Falhas definitivas: ${contadorFalha}`;
     console.log(fimMsg);
