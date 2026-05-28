@@ -14,7 +14,10 @@ robo-alvara/
 │   └── prompt.txt           ← prompt enviado ao Gemini
 ├── data/                    ← entradas (PDFs) e saídas (logs, runs) — gitignored
 ├── exec/
-│   ├── configurar-projeto-inicial.bat  ← bootstrap (baixa Node + npm install + setup)
+│   ├── configurar-projeto-inicial.bat  ← bootstrap (Node + Git portable + npm + setup)
+│   ├── baixar-git.bat       ← baixa/extrai MinGit (Git portable)
+│   ├── git-configurar.bat   ← configura user/email + SSH para GitHub
+│   ├── atualizar-robo.bat   ← pull + add -A + commit auto + push (Git portable)
 │   ├── executar.bat         ← roda src/main.js
 │   ├── lista.bat            ← roda src/lista.js
 │   └── teste-planilha.bat   ← roda src/testePlanilha.js
@@ -23,19 +26,21 @@ robo-alvara/
 │   ├── lista.js             ← lista os modelos disponíveis para a chave Gemini
 │   └── testePlanilha.js     ← testa conexão com a planilha (Apps Script)
 ├── node-v25.9.0-win-x64/    ← runtime Node bundled (gitignored, baixado pelo bootstrap)
+├── atualizar-robo.bat       ← atalho para exec\atualizar-robo.bat
 ├── package.json
 ├── .gitignore
 └── README.md
 ```
 
-## Setup
+## Setup Inicial
 
 Clique duas vezes em **`exec\configurar-projeto-inicial.bat`**. Ele faz tudo:
 
 1. Baixa o Node.js bundled (`node-v25.9.0-win-x64`) de `nodejs.org` e extrai na raiz do projeto.
-2. Roda `npm install` usando o npm bundled.
-3. Cria a pasta `data\`.
-4. Cria `config\config.json` a partir do `config.sample.json` (se ainda não existir).
+2. Baixa o Git portable (`MinGit-2.49.0-64-bit`) e extrai na raiz do projeto.
+3. Roda `npm install` usando o npm bundled.
+4. Cria a pasta `data\`.
+5. Cria `config\config.json` a partir do `config.sample.json` (se ainda não existir).
 
 Depois, edite `config\config.json`:
 
@@ -54,7 +59,72 @@ Depois, edite `config\config.json`:
 
 `config\config.json` está no `.gitignore` e nunca deve ser commitado.
 
-## Como rodar
+## Scripts `.bat` e exemplos de uso
+
+### 1) Setup do projeto
+
+- **Arquivo:** `exec\configurar-projeto-inicial.bat`
+- **O que faz:** prepara Node bundled, Git portable, dependências e config inicial.
+
+```cmd
+exec\configurar-projeto-inicial.bat
+```
+
+### 2) Baixar Git portable (isolado)
+
+- **Arquivo:** `exec\baixar-git.bat`
+- **O que faz:** baixa e extrai `MinGit-2.49.0-64-bit` na raiz do projeto.
+
+```cmd
+exec\baixar-git.bat
+```
+
+### 3) Configurar GitHub (user/email + chave SSH)
+
+- **Arquivo:** `exec\git-configurar.bat`
+- **O que faz:** pergunta nome/email, gera chave `ed25519`, tenta adicionar no `ssh-agent`, copia chave pública e mostra passo a passo para cadastrar no GitHub.
+
+```cmd
+exec\git-configurar.bat
+```
+
+### 4) Atualizar repositório e publicar alterações
+
+- **Arquivo principal:** `exec\atualizar-robo.bat`
+- **Atalho:** `atualizar-robo.bat` (na raiz)
+- **O que faz:** `git pull --rebase` + `git add -A` + commit automático (timestamp) + `git push`, usando Git portable.
+
+```cmd
+exec\atualizar-robo.bat
+```
+
+ou:
+
+```cmd
+atualizar-robo.bat
+```
+
+### 5) Rodar o robô e utilitários
+
+- **Triagem principal (`src\main.js`):**
+
+```cmd
+exec\executar.bat
+```
+
+- **Listar modelos Gemini (`src\lista.js`):**
+
+```cmd
+exec\lista.bat
+```
+
+- **Testar POST da planilha (`src\testePlanilha.js`):**
+
+```cmd
+exec\teste-planilha.bat
+```
+
+## Como rodar (alternativa via npm)
 
 ### Via executores (recomendado)
 
@@ -81,11 +151,14 @@ npm run teste:planilha     :: src\testePlanilha.js
 1. Lê `config\config.json`.
 2. **1ª passada:** para cada subpasta numerada dentro de `PASTA_RAIZ`:
    - Verifica se contém `email.pdf` e `docbasico.pdf`.
+   - Registra o caminho completo da pasta no log.
    - Envia os dois PDFs + o prompt (`config\prompt.txt`) para o Gemini (`MODELO_GEMINI`).
    - Faz parse da resposta (formato pipe-separated).
    - Faz `POST` do resultado para `URL_PLANILHA`.
    - Aguarda `INTERVALO_PASTAS_MS` entre pastas.
-   - Em caso de falha (qualquer stage), a pasta é colocada em uma **fila de retry em memória** e a falha vira um WARN no log narrativo — *nada* vai para `error.log` ainda.
+   - Em caso de falha:
+     - `invalid_path` (caminho inválido/inexistente/não diretório): vai direto para fila de falha definitiva (**sem retry**).
+     - demais stages: entram em fila de retry em memória.
 3. **Rodadas de retry:** após a 1ª passada, se a fila não estiver vazia, roda até `RETRY_TENTATIVAS` rodadas. Antes de cada rodada aguarda `RETRY_INTERVALO_MS`. Pastas que dão sucesso saem da fila; pastas que continuam falhando permanecem.
 4. **Falhas definitivas:** o que sobra na fila depois de todas as rodadas é tratado em duas frentes:
    - Vai para `error.log` com o campo `tentativas` indicando quantas tentativas foram feitas.
@@ -104,7 +177,7 @@ npm run teste:planilha     :: src\testePlanilha.js
   ```json
   {"timestamp":"...","numPasta":"021","stage":"gemini_call","message":"503 ...","tentativas":4}
   ```
-  Stages possíveis: `startup`, `missing_files`, `gemini_call`, `parse_response`, `planilha_post`, `planilha_http`, `unknown`.
+  Stages possíveis: `startup`, `invalid_path`, `read_dir`, `missing_files`, `gemini_call`, `parse_response`, `planilha_post`, `planilha_http`.
 
 ### Rotação automática (archive)
 
