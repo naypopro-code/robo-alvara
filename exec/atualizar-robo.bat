@@ -2,11 +2,10 @@
 setlocal enabledelayedexpansion
 
 REM ------------------------------------------------------------
-REM Atualiza o repositorio e commita automaticamente alteracoes BDD
+REM Atualiza o repositorio e commita automaticamente todas alteracoes
 REM Usa Git portable (MinGit) na raiz do projeto.
 REM Uso:
 REM   atualizar-robo.bat
-REM   atualizar-robo.bat "data\*BDD*.*"
 REM ------------------------------------------------------------
 
 pushd "%~dp0.."
@@ -41,19 +40,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [2/5] Adicionando arquivos alvo...
-REM Sempre inclui prompt, pois ele faz parte da configuracao de triagem.
-"%GIT_EXE%" add "config\prompt.txt" >nul 2>&1
-
-REM Se voce passar um padrao no argumento, ele tambem sera adicionado.
-if not "%~1"=="" (
-    "%GIT_EXE%" add %1 >nul 2>&1
-)
+echo [2/5] Adicionando todas alteracoes...
+"%GIT_EXE%" add -A
 
 echo [3/5] Verificando se ha alteracoes staged...
 "%GIT_EXE%" diff --cached --quiet
 if not errorlevel 1 (
-    echo [INFO] Nenhuma alteracao para commit nos arquivos alvo.
+    echo [INFO] Nenhuma alteracao para commit.
     popd
     exit /b 0
 )
@@ -62,7 +55,7 @@ echo [4/5] Criando commit automatico...
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'"`) do set "NOW=%%i"
 if "!NOW!"=="" set "NOW=%date% %time%"
 
-"%GIT_EXE%" commit -m "chore: atualiza arquivos BDD automaticamente (!NOW!)"
+"%GIT_EXE%" commit -m "chore: atualiza codigo automaticamente (!NOW!)"
 if errorlevel 1 (
     echo [ERRO] Falha ao criar commit.
     popd
