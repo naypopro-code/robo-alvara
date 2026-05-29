@@ -34,6 +34,8 @@ config/config.json
 # exceto este .gitkeep que mantem a pasta no repo.
 data/*
 !data/.gitkeep
+!data/documentos/
+!data/documentos/.gitkeep
 
 # OS
 .DS_Store

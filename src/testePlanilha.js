@@ -6,7 +6,7 @@ const path = require('path');
 const { carregarConfigArquivo, obterCampo } = require('./carregarConfig');
 
 const cfg = carregarConfigArquivo();
-const URL_PLANILHA = obterCampo(cfg, 'integracao', 'URL_PLANILHA');
+const URL_PLANILHA = obterCampo(cfg, 'integracao', 'urlPlanilha');
 
 async function enviarTeste() {
     console.log("🔗 Tentando conexão com a planilha...");

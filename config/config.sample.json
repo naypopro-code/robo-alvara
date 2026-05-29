@@ -1,34 +1,34 @@
 {
-    "_comentario": "Copie para config.json (gitignored). Campos podem ficar na raiz (legado) ou nos grupos abaixo.",
+    "_comentario": "Copie para config.json (gitignored). Use camelCase nos nomes dos campos.",
 
     "integracao": {
-        "CHAVE_GEMINI": "",
-        "URL_PLANILHA": ""
+        "chaveGemini": "",
+        "urlPlanilha": ""
     },
 
     "caminhos": {
-        "PASTA_RAIZ": "C://documentos/01_documentos_alvara",
-        "CAMINHO_PROMPT": "config/prompt.txt",
-        "CAMINHO_LOG": "data/log_processamento.txt",
-        "CAMINHO_ERRO_LOG": "data/error.log"
+        "pastaDocumentos": "data/documentos",
+        "prompt": "config/prompt.txt",
+        "log": "data/log_processamento.txt",
+        "erroLog": "data/error.log"
     },
 
     "gemini": {
-        "MODELO_GEMINI": "gemini-2.5-flash"
+        "modelo": "gemini-2.5-flash"
     },
 
     "triagem": {
-        "INTERVALO_PASTAS_MS": 15000,
-        "RETRY_TENTATIVAS": 3,
-        "RETRY_INTERVALO_MS": 5000
+        "intervaloPastasMs": 15000,
+        "retryTentativas": 3,
+        "retryIntervaloMs": 5000
     },
 
     "planilha": {
-        "POSTAR_PLANILHA": true
+        "postar": true
     },
 
     "documentos": {
-        "VALIDAR_TAMANHO": true,
-        "TAMANHO_MAX_MB": 50
+        "validarTamanho": true,
+        "tamanhoMaxMb": 50
     }
 }

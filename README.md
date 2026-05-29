@@ -12,7 +12,8 @@ robo-alvara/
 │   ├── config.json          ← valores reais (gitignored)
 │   ├── config.sample.json   ← template commitado
 │   └── prompt.txt           ← prompt enviado ao Gemini
-├── data/                    ← entradas (PDFs) e saídas (logs, runs) — gitignored
+├── data/
+│   └── documentos/          ← subpastas numeradas com PDFs (256/, etc.) — gitignored
 ├── exec/
 │   ├── configurar-projeto-inicial.bat  ← bootstrap (Node + Git portable + npm + setup)
 │   ├── baixar-git.bat       ← baixa/extrai MinGit (Git portable)
@@ -46,19 +47,19 @@ Depois, edite `config\config.json` (organizado por grupos; campos na raiz ainda 
 
 | Grupo | Campo | Default | Descrição |
 |---|---|---|---|
-| `integracao` | `CHAVE_GEMINI` | — | API key do Google Gemini |
-| `integracao` | `URL_PLANILHA` | — | URL do Web App do Apps Script que recebe os dados |
-| `caminhos` | `PASTA_RAIZ` | — | Pasta com as subpastas numeradas que contêm os PDFs |
-| `caminhos` | `CAMINHO_PROMPT` | `config/prompt.txt` | Caminho do prompt |
-| `caminhos` | `CAMINHO_LOG` | `data/log_processamento.txt` | Log narrativo |
-| `caminhos` | `CAMINHO_ERRO_LOG` | `data/error.log` | Log estruturado de falhas (JSON Lines) |
-| `gemini` | `MODELO_GEMINI` | `gemini-2.5-flash` | Modelo Gemini |
-| `triagem` | `INTERVALO_PASTAS_MS` | `15000` | Pausa em ms entre cada pasta |
-| `triagem` | `RETRY_TENTATIVAS` | `3` | Retries após a 1ª falha (0 desliga retry) |
-| `triagem` | `RETRY_INTERVALO_MS` | `5000` | Pausa em ms antes de cada rodada de retry |
-| `planilha` | `POSTAR_PLANILHA` | `true` | `false` = dry-run (só loga JSON, sem POST) |
-| `documentos` | `VALIDAR_TAMANHO` | `true` | `false` = desliga validação de tamanho dos PDFs |
-| `documentos` | `TAMANHO_MAX_MB` | `50` | Tamanho máximo por PDF (`email.pdf` e `docbasico.pdf`) |
+| `integracao` | `chaveGemini` | — | API key do Google Gemini |
+| `integracao` | `urlPlanilha` | — | URL do Web App do Apps Script que recebe os dados |
+| `caminhos` | `pastaDocumentos` | `data/documentos` | Pasta com as subpastas numeradas (`256`, etc.) |
+| `caminhos` | `prompt` | `config/prompt.txt` | Caminho do prompt |
+| `caminhos` | `log` | `data/log_processamento.txt` | Log narrativo |
+| `caminhos` | `erroLog` | `data/error.log` | Log estruturado de falhas (JSON Lines) |
+| `gemini` | `modelo` | `gemini-2.5-flash` | Modelo Gemini |
+| `triagem` | `intervaloPastasMs` | `15000` | Pausa em ms entre cada pasta |
+| `triagem` | `retryTentativas` | `3` | Retries após a 1ª falha (0 desliga retry) |
+| `triagem` | `retryIntervaloMs` | `5000` | Pausa em ms antes de cada rodada de retry |
+| `planilha` | `postar` | `true` | `false` = dry-run (só loga JSON, sem POST) |
+| `documentos` | `validarTamanho` | `true` | `false` = desliga validação de tamanho dos PDFs |
+| `documentos` | `tamanhoMaxMb` | `50` | Tamanho máximo por PDF (`email.pdf` e `docbasico.pdf`) |
 
 `config\config.json` está no `.gitignore` e nunca deve ser commitado.
 
@@ -152,18 +153,18 @@ npm run teste:planilha     :: src\testePlanilha.js
 ## Como funciona o `main.js`
 
 1. Lê `config\config.json`.
-2. **1ª passada:** para cada subpasta numerada dentro de `PASTA_RAIZ`:
+2. **1ª passada:** para cada subpasta numerada dentro de `caminhos.pastaDocumentos` (ex.: `data/documentos/256`):
    - Verifica se contém `email.pdf` e `docbasico.pdf`.
-   - Valida tamanho dos PDFs (se `documentos.VALIDAR_TAMANHO` estiver ativo).
+   - Valida tamanho dos PDFs (se `documentos.validarTamanho` estiver ativo).
    - Registra o caminho completo da pasta no log.
-   - Envia os dois PDFs + o prompt (`config\prompt.txt`) para o Gemini (`MODELO_GEMINI`).
+   - Envia os dois PDFs + o prompt (`config\prompt.txt`) para o Gemini (`gemini.modelo`).
    - Faz parse da resposta (formato pipe-separated).
-   - Faz `POST` do resultado para `URL_PLANILHA`.
-   - Aguarda `INTERVALO_PASTAS_MS` entre pastas.
+   - Faz `POST` do resultado para `integracao.urlPlanilha`.
+   - Aguarda `triagem.intervaloPastasMs` entre pastas.
    - Em caso de falha:
      - `invalid_path` ou `file_too_large`: vai direto para fila de falha definitiva (**sem retry**).
      - demais stages: entram em fila de retry em memória.
-3. **Rodadas de retry:** após a 1ª passada, se a fila não estiver vazia, roda até `RETRY_TENTATIVAS` rodadas. Antes de cada rodada aguarda `RETRY_INTERVALO_MS`. Pastas que dão sucesso saem da fila; pastas que continuam falhando permanecem.
+3. **Rodadas de retry:** após a 1ª passada, se a fila não estiver vazia, roda até `triagem.retryTentativas` rodadas. Antes de cada rodada aguarda `triagem.retryIntervaloMs`. Pastas que dão sucesso saem da fila; pastas que continuam falhando permanecem.
 4. **Falhas definitivas:** o que sobra na fila depois de todas as rodadas é tratado em duas frentes:
    - Vai para `error.log` com o campo `tentativas` indicando quantas tentativas foram feitas.
    - É **reportado na planilha** como uma linha com `status="ERRO"`, `motivo=<mensagem do último erro>` e os demais campos preenchidos com `"---"`. Assim a planilha sempre tem uma linha por pasta processada (sucesso ou falha definitiva). Se este POST de erro também falhar, é apenas registrado no log narrativo — não cascateia.
@@ -199,5 +200,5 @@ no `.gitignore`. Não há limite de retenção — se quiser podar, apague manua
 
 ## Notas de segurança
 
-- `src\main.js`, `src\lista.js` e `src\testePlanilha.js` leem `CHAVE_GEMINI` e `URL_PLANILHA` de `config\config.json`. Nenhum segredo fica em código commitado.
+- `src\main.js`, `src\lista.js` e `src\testePlanilha.js` leem `integracao.chaveGemini` e `integracao.urlPlanilha` de `config\config.json`. Nenhum segredo fica em código commitado.
 - Nunca commite `config\config.json` ou qualquer conteúdo de `data\`.

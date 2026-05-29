@@ -73,35 +73,35 @@ function obterNumero(cfg, grupo, campo, fallback) {
 
 function criarContexto() {
     const cfg = carregarConfigArquivo();
-    const tamanhoMaxMb = obterNumero(cfg, 'documentos', 'TAMANHO_MAX_MB', 50);
+    const tamanhoMaxMb = obterNumero(cfg, 'documentos', 'tamanhoMaxMb', 50);
 
     return {
         cfg,
         integracao: {
-            chaveGemini: obterCampo(cfg, 'integracao', 'CHAVE_GEMINI'),
-            urlPlanilha: obterCampo(cfg, 'integracao', 'URL_PLANILHA'),
+            chaveGemini: obterCampo(cfg, 'integracao', 'chaveGemini'),
+            urlPlanilha: obterCampo(cfg, 'integracao', 'urlPlanilha'),
         },
         caminhos: {
-            pastaRaiz: obterCaminho(cfg, 'caminhos', 'PASTA_RAIZ'),
-            prompt: obterCaminho(cfg, 'caminhos', 'CAMINHO_PROMPT'),
-            log: obterCaminho(cfg, 'caminhos', 'CAMINHO_LOG'),
-            erroLog: obterCaminho(cfg, 'caminhos', 'CAMINHO_ERRO_LOG'),
+            pastaDocumentos: obterCaminho(cfg, 'caminhos', 'pastaDocumentos'),
+            prompt: obterCaminho(cfg, 'caminhos', 'prompt'),
+            log: obterCaminho(cfg, 'caminhos', 'log'),
+            erroLog: obterCaminho(cfg, 'caminhos', 'erroLog'),
         },
         gemini: {
-            modelo: obterCampo(cfg, 'gemini', 'MODELO_GEMINI', 'gemini-2.5-flash'),
+            modelo: obterCampo(cfg, 'gemini', 'modelo', 'gemini-2.5-flash'),
             client: null,
             model: null,
         },
         triagem: {
-            intervaloPastasMs: obterNumero(cfg, 'triagem', 'INTERVALO_PASTAS_MS', 15000),
-            retryTentativas: obterNumero(cfg, 'triagem', 'RETRY_TENTATIVAS', 3),
-            retryIntervaloMs: obterNumero(cfg, 'triagem', 'RETRY_INTERVALO_MS', 5000),
+            intervaloPastasMs: obterNumero(cfg, 'triagem', 'intervaloPastasMs', 15000),
+            retryTentativas: obterNumero(cfg, 'triagem', 'retryTentativas', 3),
+            retryIntervaloMs: obterNumero(cfg, 'triagem', 'retryIntervaloMs', 5000),
         },
         planilha: {
-            postar: obterBoolean(cfg, 'planilha', 'POSTAR_PLANILHA', true),
+            postar: obterBoolean(cfg, 'planilha', 'postar', true),
         },
         documentos: {
-            validarTamanho: obterBoolean(cfg, 'documentos', 'VALIDAR_TAMANHO', true),
+            validarTamanho: obterBoolean(cfg, 'documentos', 'validarTamanho', true),
             tamanhoMaxMb,
             tamanhoMaxBytes: Math.floor(tamanhoMaxMb * 1024 * 1024),
         },
@@ -144,7 +144,7 @@ function bytesParaMb(bytes) {
 }
 
 function montarCaminhoPasta(ctx, numPasta) {
-    return path.join(ctx.caminhos.pastaRaiz, String(numPasta));
+    return path.join(ctx.caminhos.pastaDocumentos, String(numPasta));
 }
 
 // =============================================================================
@@ -587,9 +587,10 @@ function registrarResultadoRetry(ctx, filas, rodada, item, resultado) {
 }
 
 function listarPastasNumeradas(ctx) {
+    const base = ctx.caminhos.pastaDocumentos;
     return fs
-        .readdirSync(ctx.caminhos.pastaRaiz)
-        .filter((nome) => fs.lstatSync(path.join(ctx.caminhos.pastaRaiz, nome)).isDirectory());
+        .readdirSync(base)
+        .filter((nome) => fs.lstatSync(path.join(base, nome)).isDirectory());
 }
 
 function lerPromptTemplate(ctx) {
@@ -597,19 +598,19 @@ function lerPromptTemplate(ctx) {
 }
 
 function verificarAmbienteInicial(ctx) {
-    const pastaRaizExiste = fs.existsSync(ctx.caminhos.pastaRaiz);
+    const pastaDocumentosExiste = fs.existsSync(ctx.caminhos.pastaDocumentos);
     const promptExiste = fs.existsSync(ctx.caminhos.prompt);
 
-    if (pastaRaizExiste && promptExiste) {
+    if (pastaDocumentosExiste && promptExiste) {
         return true;
     }
 
-    const erroMsg = '❌ [ERRO] Pasta raiz ou prompt.txt não encontrados.';
+    const erroMsg = '❌ [ERRO] Pasta de documentos ou prompt.txt não encontrados.';
     logConsoleEArquivo(ctx, erroMsg);
     gravarErroFinal(ctx, {
         stage: 'startup',
         message: erroMsg,
-        extra: { pastaRaizExiste, promptExiste },
+        extra: { pastaDocumentosExiste, promptExiste },
     });
     return false;
 }

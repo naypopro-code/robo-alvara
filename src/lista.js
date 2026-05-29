@@ -2,7 +2,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { carregarConfigArquivo, obterCampo } = require('./carregarConfig');
 
 const cfg = carregarConfigArquivo();
-const CHAVE_GEMINI = obterCampo(cfg, 'integracao', 'CHAVE_GEMINI');
+const CHAVE_GEMINI = obterCampo(cfg, 'integracao', 'chaveGemini');
 
 const genAI = new GoogleGenerativeAI(CHAVE_GEMINI);
 

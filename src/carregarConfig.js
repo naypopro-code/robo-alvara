@@ -8,7 +8,7 @@ function carregarConfigArquivo() {
     let cfgRaw;
     try {
         cfgRaw = fs.readFileSync(CAMINHO_CONFIG, 'utf8');
-    } catch (e) {
+    } catch {
         console.error(`❌ [ERRO] Arquivo de config não encontrado: ${CAMINHO_CONFIG}`);
         console.error('    Copie config/config.sample.json para config/config.json e preencha os valores.');
         process.exit(1);
@@ -21,13 +21,12 @@ function carregarConfigArquivo() {
     }
 }
 
-/** Lê campo no grupo ou na raiz (compatibilidade com config antigo plano) */
 function obterCampo(cfg, grupo, campo, fallback) {
     const g = cfg[grupo];
-    if (g && typeof g === 'object' && !Array.isArray(g) && g[campo] !== undefined && g[campo] !== null) {
+    if (g && typeof g === 'object' && !Array.isArray(g) && g[campo] != null) {
         return g[campo];
     }
-    if (cfg[campo] !== undefined && cfg[campo] !== null) {
+    if (cfg[campo] != null) {
         return cfg[campo];
     }
     return fallback;
@@ -35,7 +34,7 @@ function obterCampo(cfg, grupo, campo, fallback) {
 
 function obterCampoObrigatorio(cfg, grupo, campo) {
     const valor = obterCampo(cfg, grupo, campo);
-    if (valor === undefined || valor === null || (typeof valor === 'string' && valor.trim() === '')) {
+    if (valor == null || (typeof valor === 'string' && valor.trim() === '')) {
         console.error(`❌ [ERRO] Campo obrigatório ausente/inválido no config.json: ${grupo}.${campo}`);
         process.exit(1);
     }
@@ -58,8 +57,7 @@ function obterBoolean(cfg, grupo, campo, fallback = false) {
 }
 
 function obterNumero(cfg, grupo, campo, fallback) {
-    const valor = obterCampo(cfg, grupo, campo, fallback);
-    const n = Number(valor);
+    const n = Number(obterCampo(cfg, grupo, campo, fallback));
     return Number.isFinite(n) ? n : fallback;
 }
 

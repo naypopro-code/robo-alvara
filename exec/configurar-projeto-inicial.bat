@@ -86,13 +86,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM --- 4) Pasta data\ ---
+REM --- 4) Pastas data\ e data\documentos\ ---
 echo.
-if exist "data\" (
-    echo [4/5] Pasta data\ ja existe.
+if not exist "data\" mkdir "data"
+if exist "data\documentos\" (
+    echo [4/5] Pasta data\documentos\ ja existe.
 ) else (
-    mkdir "data"
-    echo [4/5] Pasta data\ criada.
+    mkdir "data\documentos"
+    echo [4/5] Pasta data\documentos\ criada.
 )
 
 REM --- 5) config\config.json a partir do sample ---
