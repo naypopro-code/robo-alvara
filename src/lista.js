@@ -1,17 +1,8 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const fs = require('fs');
-const path = require('path');
+const { carregarConfigArquivo, obterCampo } = require('./carregarConfig');
 
-const CAMINHO_CONFIG = path.join(__dirname, '..', 'config', 'config.json');
-let cfg;
-try {
-    cfg = JSON.parse(fs.readFileSync(CAMINHO_CONFIG, 'utf8'));
-} catch (e) {
-    console.error(`❌ [ERRO] config.json nao encontrado: ${CAMINHO_CONFIG}`);
-    console.error('    Rode exec\\configurar-projeto-inicial.bat primeiro.');
-    process.exit(1);
-}
-const CHAVE_GEMINI = cfg.CHAVE_GEMINI;
+const cfg = carregarConfigArquivo();
+const CHAVE_GEMINI = obterCampo(cfg, 'integracao', 'CHAVE_GEMINI');
 
 const genAI = new GoogleGenerativeAI(CHAVE_GEMINI);
 

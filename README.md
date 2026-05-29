@@ -42,20 +42,23 @@ Clique duas vezes em **`exec\configurar-projeto-inicial.bat`**. Ele faz tudo:
 4. Cria a pasta `data\`.
 5. Cria `config\config.json` a partir do `config.sample.json` (se ainda não existir).
 
-Depois, edite `config\config.json`:
+Depois, edite `config\config.json` (organizado por grupos; campos na raiz ainda funcionam por compatibilidade):
 
-| Campo | Default | Descrição |
-|---|---|---|
-| `CHAVE_GEMINI` | — | API key do Google Gemini |
-| `URL_PLANILHA` | — | URL do Web App do Apps Script que recebe os dados |
-| `PASTA_RAIZ` | — | Pasta com as subpastas numeradas que contêm os PDFs (absoluta ou relativa à raiz do projeto) |
-| `CAMINHO_PROMPT` | `config/prompt.txt` | Caminho do prompt |
-| `CAMINHO_LOG` | `data/log_processamento.txt` | Log narrativo |
-| `CAMINHO_ERRO_LOG` | `data/error.log` | Log estruturado de falhas (JSON Lines) |
-| `MODELO_GEMINI` | `gemini-2.5-flash` | Nome do modelo Gemini (ex.: `gemini-2.5-flash`, `gemini-flash-lite-latest`) |
-| `INTERVALO_PASTAS_MS` | `15000` | Pausa em ms entre cada pasta (rate-limit) |
-| `RETRY_TENTATIVAS` | `3` | Número de retries após a 1ª falha (0 desliga retry) |
-| `RETRY_INTERVALO_MS` | `5000` | Pausa em ms antes de cada rodada de retry |
+| Grupo | Campo | Default | Descrição |
+|---|---|---|---|
+| `integracao` | `CHAVE_GEMINI` | — | API key do Google Gemini |
+| `integracao` | `URL_PLANILHA` | — | URL do Web App do Apps Script que recebe os dados |
+| `caminhos` | `PASTA_RAIZ` | — | Pasta com as subpastas numeradas que contêm os PDFs |
+| `caminhos` | `CAMINHO_PROMPT` | `config/prompt.txt` | Caminho do prompt |
+| `caminhos` | `CAMINHO_LOG` | `data/log_processamento.txt` | Log narrativo |
+| `caminhos` | `CAMINHO_ERRO_LOG` | `data/error.log` | Log estruturado de falhas (JSON Lines) |
+| `gemini` | `MODELO_GEMINI` | `gemini-2.5-flash` | Modelo Gemini |
+| `triagem` | `INTERVALO_PASTAS_MS` | `15000` | Pausa em ms entre cada pasta |
+| `triagem` | `RETRY_TENTATIVAS` | `3` | Retries após a 1ª falha (0 desliga retry) |
+| `triagem` | `RETRY_INTERVALO_MS` | `5000` | Pausa em ms antes de cada rodada de retry |
+| `planilha` | `POSTAR_PLANILHA` | `true` | `false` = dry-run (só loga JSON, sem POST) |
+| `documentos` | `VALIDAR_TAMANHO` | `true` | `false` = desliga validação de tamanho dos PDFs |
+| `documentos` | `TAMANHO_MAX_MB` | `50` | Tamanho máximo por PDF (`email.pdf` e `docbasico.pdf`) |
 
 `config\config.json` está no `.gitignore` e nunca deve ser commitado.
 
@@ -151,13 +154,14 @@ npm run teste:planilha     :: src\testePlanilha.js
 1. Lê `config\config.json`.
 2. **1ª passada:** para cada subpasta numerada dentro de `PASTA_RAIZ`:
    - Verifica se contém `email.pdf` e `docbasico.pdf`.
+   - Valida tamanho dos PDFs (se `documentos.VALIDAR_TAMANHO` estiver ativo).
    - Registra o caminho completo da pasta no log.
    - Envia os dois PDFs + o prompt (`config\prompt.txt`) para o Gemini (`MODELO_GEMINI`).
    - Faz parse da resposta (formato pipe-separated).
    - Faz `POST` do resultado para `URL_PLANILHA`.
    - Aguarda `INTERVALO_PASTAS_MS` entre pastas.
    - Em caso de falha:
-     - `invalid_path` (caminho inválido/inexistente/não diretório): vai direto para fila de falha definitiva (**sem retry**).
+     - `invalid_path` ou `file_too_large`: vai direto para fila de falha definitiva (**sem retry**).
      - demais stages: entram em fila de retry em memória.
 3. **Rodadas de retry:** após a 1ª passada, se a fila não estiver vazia, roda até `RETRY_TENTATIVAS` rodadas. Antes de cada rodada aguarda `RETRY_INTERVALO_MS`. Pastas que dão sucesso saem da fila; pastas que continuam falhando permanecem.
 4. **Falhas definitivas:** o que sobra na fila depois de todas as rodadas é tratado em duas frentes:
@@ -177,7 +181,7 @@ npm run teste:planilha     :: src\testePlanilha.js
   ```json
   {"timestamp":"...","numPasta":"021","stage":"gemini_call","message":"503 ...","tentativas":4}
   ```
-  Stages possíveis: `startup`, `invalid_path`, `read_dir`, `missing_files`, `gemini_call`, `parse_response`, `planilha_post`, `planilha_http`.
+  Stages possíveis: `startup`, `invalid_path`, `file_too_large`, `read_dir`, `missing_files`, `gemini_call`, `parse_response`, `planilha_post`, `planilha_http`.
 
 ### Rotação automática (archive)
 

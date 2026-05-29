@@ -116,8 +116,7 @@ echo    SETUP CONCLUIDO COM SUCESSO
 echo =======================================================
 echo.
 echo PROXIMO PASSO:
-echo   - Edite config\config.json com:
-echo       CHAVE_GEMINI, URL_PLANILHA e PASTA_RAIZ
+echo   - Edite config\config.json (grupos integracao, caminhos, gemini, etc.)
 echo   - Depois execute: exec\executar.bat
 echo.
 popd

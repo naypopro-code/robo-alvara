@@ -1,16 +1,34 @@
 {
-    "_comentario": "Copie este arquivo para config.json (no mesmo diretorio) e preencha os valores. config.json esta no .gitignore.",
+    "_comentario": "Copie para config.json (gitignored). Campos podem ficar na raiz (legado) ou nos grupos abaixo.",
 
-    "CHAVE_GEMINI": "",
-    "URL_PLANILHA": "",
-    "PASTA_RAIZ": "C://documentos/01_documentos_alvara",
+    "integracao": {
+        "CHAVE_GEMINI": "",
+        "URL_PLANILHA": ""
+    },
 
-    "CAMINHO_PROMPT": "config/prompt.txt",
-    "CAMINHO_LOG": "data/log_processamento.txt",
-    "CAMINHO_ERRO_LOG": "data/error.log",
+    "caminhos": {
+        "PASTA_RAIZ": "C://documentos/01_documentos_alvara",
+        "CAMINHO_PROMPT": "config/prompt.txt",
+        "CAMINHO_LOG": "data/log_processamento.txt",
+        "CAMINHO_ERRO_LOG": "data/error.log"
+    },
 
-    "MODELO_GEMINI": "gemini-2.5-flash",
-    "INTERVALO_PASTAS_MS": 15000,
-    "RETRY_TENTATIVAS": 3,
-    "RETRY_INTERVALO_MS": 5000
+    "gemini": {
+        "MODELO_GEMINI": "gemini-2.5-flash"
+    },
+
+    "triagem": {
+        "INTERVALO_PASTAS_MS": 15000,
+        "RETRY_TENTATIVAS": 3,
+        "RETRY_INTERVALO_MS": 5000
+    },
+
+    "planilha": {
+        "POSTAR_PLANILHA": true
+    },
+
+    "documentos": {
+        "VALIDAR_TAMANHO": true,
+        "TAMANHO_MAX_MB": 50
+    }
 }

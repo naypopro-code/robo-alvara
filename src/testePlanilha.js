@@ -3,16 +3,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const CAMINHO_CONFIG = path.join(__dirname, '..', 'config', 'config.json');
-let cfg;
-try {
-    cfg = JSON.parse(fs.readFileSync(CAMINHO_CONFIG, 'utf8'));
-} catch (e) {
-    console.error(`❌ [ERRO] config.json nao encontrado: ${CAMINHO_CONFIG}`);
-    console.error('    Rode exec\\configurar-projeto-inicial.bat primeiro.');
-    process.exit(1);
-}
-const URL_PLANILHA = cfg.URL_PLANILHA;
+const { carregarConfigArquivo, obterCampo } = require('./carregarConfig');
+
+const cfg = carregarConfigArquivo();
+const URL_PLANILHA = obterCampo(cfg, 'integracao', 'URL_PLANILHA');
 
 async function enviarTeste() {
     console.log("🔗 Tentando conexão com a planilha...");
