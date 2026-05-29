@@ -1,118 +1,167 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const path = require('path');
-const {
-    carregarConfigArquivo,
-    obterCampo,
-    obterCaminho,
-    obterBoolean,
-    obterNumero,
-} = require('./carregarConfig');
 
-// --- 1. CONFIGURAÇÕES ---
-const cfg = carregarConfigArquivo();
+// =============================================================================
+// Constantes
+// =============================================================================
 
-const CHAVE_GEMINI = obterCampo(cfg, 'integracao', 'CHAVE_GEMINI');
-const URL_PLANILHA = obterCampo(cfg, 'integracao', 'URL_PLANILHA');
-const PASTA_RAIZ = obterCaminho(cfg, 'caminhos', 'PASTA_RAIZ');
-const CAMINHO_PROMPT = obterCaminho(cfg, 'caminhos', 'CAMINHO_PROMPT');
-const CAMINHO_LOG = obterCaminho(cfg, 'caminhos', 'CAMINHO_LOG');
-const CAMINHO_ERRO_LOG = obterCaminho(cfg, 'caminhos', 'CAMINHO_ERRO_LOG');
+const PROJECT_ROOT = path.join(__dirname, '..');
+const CAMINHO_CONFIG = path.join(PROJECT_ROOT, 'config', 'config.json');
+const ARQUIVOS_PDF_OBRIGATORIOS = ['email.pdf', 'docbasico.pdf'];
 
-const MODELO_GEMINI = obterCampo(cfg, 'gemini', 'MODELO_GEMINI', 'gemini-2.5-flash');
-const INTERVALO_PASTAS_MS = obterNumero(cfg, 'triagem', 'INTERVALO_PASTAS_MS', 15000);
-const RETRY_TENTATIVAS = obterNumero(cfg, 'triagem', 'RETRY_TENTATIVAS', 3);
-const RETRY_INTERVALO_MS = obterNumero(cfg, 'triagem', 'RETRY_INTERVALO_MS', 5000);
-const POSTAR_PLANILHA = obterBoolean(cfg, 'planilha', 'POSTAR_PLANILHA', true);
+// =============================================================================
+// Configuração
+// =============================================================================
 
-const VALIDAR_TAMANHO_DOCUMENTOS = obterBoolean(cfg, 'documentos', 'VALIDAR_TAMANHO', true);
-const TAMANHO_MAX_MB = obterNumero(cfg, 'documentos', 'TAMANHO_MAX_MB', 50);
-const TAMANHO_MAX_BYTES = Math.floor(TAMANHO_MAX_MB * 1024 * 1024);
-
-// --- 2. INICIALIZAÇÃO ---
-const genAI = new GoogleGenerativeAI(CHAVE_GEMINI);
-const model = genAI.getGenerativeModel({ model: MODELO_GEMINI });
-
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-function gravarLog(mensagem) {
-    const timestamp = new Date().toLocaleString('pt-BR');
-    fs.appendFileSync(CAMINHO_LOG, `[${timestamp}] ${mensagem}\n`);
-}
-
-async function postarNaPlanilha(payload, rotulo = 'PLANILHA') {
-    const body = JSON.stringify(payload);
-
-    if (!POSTAR_PLANILHA) {
-        const msg = `📋 [DRY-RUN ${rotulo}] ${body}`;
-        console.log(msg);
-        gravarLog(msg);
-        return { ok: true, dryRun: true };
-    }
-
+function carregarConfigArquivo() {
+    let cfgRaw;
     try {
-        const resp = await fetch(URL_PLANILHA, {
-            method: 'POST',
-            body,
-        });
-        if (!resp.ok) {
-            return {
-                ok: false,
-                httpStatus: resp.status,
-                message: `Status HTTP ${resp.status}`,
-            };
-        }
-        return { ok: true, httpStatus: resp.status };
-    } catch (err) {
-        return { ok: false, message: err.message };
+        cfgRaw = fs.readFileSync(CAMINHO_CONFIG, 'utf8');
+    } catch {
+        console.error(`❌ [ERRO] Arquivo de config não encontrado: ${CAMINHO_CONFIG}`);
+        console.error('    Copie config/config.sample.json para config/config.json e preencha os valores.');
+        process.exit(1);
+    }
+    try {
+        return JSON.parse(cfgRaw);
+    } catch (e) {
+        console.error(`❌ [ERRO] config.json com JSON inválido: ${e.message}`);
+        process.exit(1);
     }
 }
 
-async function postarErroPlanilha(numPasta, erro) {
-    const dadosErro = {
-        numPasta: numPasta,
-        respostaIA: `${numPasta}|---|---|---|---|---|---|---|ERRO|0|${(erro && erro.message) || "Erro desconhecido"}|---|---|---|---|---`
+function obterCampo(cfg, grupo, campo, fallback) {
+    const g = cfg[grupo];
+    if (g && typeof g === 'object' && !Array.isArray(g) && g[campo] != null) {
+        return g[campo];
+    }
+    if (cfg[campo] != null) {
+        return cfg[campo];
+    }
+    return fallback;
+}
+
+function obterCampoObrigatorio(cfg, grupo, campo) {
+    const valor = obterCampo(cfg, grupo, campo);
+    if (valor == null || (typeof valor === 'string' && valor.trim() === '')) {
+        console.error(`❌ [ERRO] Campo obrigatório ausente/inválido no config.json: ${grupo}.${campo}`);
+        process.exit(1);
+    }
+    return valor;
+}
+
+function resolverCaminho(p) {
+    return path.isAbsolute(p) ? p : path.join(PROJECT_ROOT, p);
+}
+
+function obterCaminho(cfg, grupo, campo) {
+    return resolverCaminho(obterCampoObrigatorio(cfg, grupo, campo));
+}
+
+function obterBoolean(cfg, grupo, campo, fallback = false) {
+    const valor = obterCampo(cfg, grupo, campo, fallback);
+    if (valor === false || valor === 'false' || valor === 0) return false;
+    if (valor === true || valor === 'true' || valor === 1) return true;
+    return Boolean(valor);
+}
+
+function obterNumero(cfg, grupo, campo, fallback) {
+    const n = Number(obterCampo(cfg, grupo, campo, fallback));
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function criarContexto() {
+    const cfg = carregarConfigArquivo();
+    const tamanhoMaxMb = obterNumero(cfg, 'documentos', 'TAMANHO_MAX_MB', 50);
+
+    return {
+        cfg,
+        integracao: {
+            chaveGemini: obterCampo(cfg, 'integracao', 'CHAVE_GEMINI'),
+            urlPlanilha: obterCampo(cfg, 'integracao', 'URL_PLANILHA'),
+        },
+        caminhos: {
+            pastaRaiz: obterCaminho(cfg, 'caminhos', 'PASTA_RAIZ'),
+            prompt: obterCaminho(cfg, 'caminhos', 'CAMINHO_PROMPT'),
+            log: obterCaminho(cfg, 'caminhos', 'CAMINHO_LOG'),
+            erroLog: obterCaminho(cfg, 'caminhos', 'CAMINHO_ERRO_LOG'),
+        },
+        gemini: {
+            modelo: obterCampo(cfg, 'gemini', 'MODELO_GEMINI', 'gemini-2.5-flash'),
+            client: null,
+            model: null,
+        },
+        triagem: {
+            intervaloPastasMs: obterNumero(cfg, 'triagem', 'INTERVALO_PASTAS_MS', 15000),
+            retryTentativas: obterNumero(cfg, 'triagem', 'RETRY_TENTATIVAS', 3),
+            retryIntervaloMs: obterNumero(cfg, 'triagem', 'RETRY_INTERVALO_MS', 5000),
+        },
+        planilha: {
+            postar: obterBoolean(cfg, 'planilha', 'POSTAR_PLANILHA', true),
+        },
+        documentos: {
+            validarTamanho: obterBoolean(cfg, 'documentos', 'VALIDAR_TAMANHO', true),
+            tamanhoMaxMb,
+            tamanhoMaxBytes: Math.floor(tamanhoMaxMb * 1024 * 1024),
+        },
     };
-
-    const resultado = await postarNaPlanilha(dadosErro, `ERRO Pasta ${numPasta}`);
-    if (resultado.dryRun) {
-        return;
-    }
-    if (resultado.ok) {
-        gravarLog(`📤 [PLANILHA-ERRO] Pasta ${numPasta} reportada como ERRO na planilha.`);
-    } else if (resultado.httpStatus) {
-        gravarLog(`⚠️ [PLANILHA-ERRO] Falha HTTP ${resultado.httpStatus} ao reportar pasta ${numPasta}.`);
-    } else {
-        gravarLog(`⚠️ [PLANILHA-ERRO] Falha ao reportar pasta ${numPasta}: ${resultado.message}`);
-    }
 }
 
-function arquivarLogsAnteriores() {
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
-    const alvos = [CAMINHO_LOG, CAMINHO_ERRO_LOG];
-
-    for (const src of alvos) {
-        if (!fs.existsSync(src)) continue;
-        try {
-            if (fs.statSync(src).size === 0) continue;
-        } catch (_) {
-            continue;
-        }
-        const archiveDir = path.join(path.dirname(src), 'archive');
-        try {
-            fs.mkdirSync(archiveDir, { recursive: true });
-            const ext = path.extname(src);
-            const base = path.basename(src, ext);
-            const dst = path.join(archiveDir, `${base}_${ts}${ext}`);
-            fs.renameSync(src, dst);
-            console.log(`📦 [ARCHIVE] ${path.basename(src)} -> archive/${path.basename(dst)}`);
-        } catch (err) {
-            console.warn(`⚠️ [ARCHIVE] Falha ao arquivar ${src}: ${err.message}`);
-        }
-    }
+function inicializarGemini(ctx) {
+    ctx.gemini.client = new GoogleGenerativeAI(ctx.integracao.chaveGemini);
+    ctx.gemini.model = ctx.gemini.client.getGenerativeModel({ model: ctx.gemini.modelo });
 }
 
-function gravarErroFinal({ numPasta, stage, message, extra, tentativas }) {
+// =============================================================================
+// Resultados (padrão de retorno)
+// =============================================================================
+
+function resultadoSucesso(status) {
+    return { sucesso: true, status };
+}
+
+function resultadoFalha(numPasta, erro) {
+    return { sucesso: false, erro: { numPasta, ...erro } };
+}
+
+function erroSemRetry(stage, message, extra = {}) {
+    return { stage, semRetry: true, message, extra };
+}
+
+function erroComRetry(stage, message, extra = {}) {
+    return { stage, message, extra };
+}
+
+// =============================================================================
+// Utilitários
+// =============================================================================
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function bytesParaMb(bytes) {
+    return Number((bytes / 1024 / 1024).toFixed(2));
+}
+
+function montarCaminhoPasta(ctx, numPasta) {
+    return path.join(ctx.caminhos.pastaRaiz, String(numPasta));
+}
+
+// =============================================================================
+// Logging e persistência de erros
+// =============================================================================
+
+function gravarLog(ctx, mensagem) {
+    const timestamp = new Date().toLocaleString('pt-BR');
+    fs.appendFileSync(ctx.caminhos.log, `[${timestamp}] ${mensagem}\n`);
+}
+
+function logConsoleEArquivo(ctx, mensagem) {
+    console.log(mensagem);
+    gravarLog(ctx, mensagem);
+}
+
+function gravarErroFinal(ctx, { numPasta, stage, message, extra, tentativas }) {
     const entry = {
         timestamp: new Date().toISOString(),
         numPasta: numPasta || null,
@@ -121,35 +170,54 @@ function gravarErroFinal({ numPasta, stage, message, extra, tentativas }) {
         tentativas: tentativas || 1,
         ...(extra || {}),
     };
-    fs.appendFileSync(CAMINHO_ERRO_LOG, JSON.stringify(entry) + '\n');
+    fs.appendFileSync(ctx.caminhos.erroLog, `${JSON.stringify(entry)}\n`);
 }
 
-function montarCaminhoPasta(numPasta) {
-    return path.join(PASTA_RAIZ, String(numPasta));
+function arquivarArquivoLog(src, ts) {
+    if (!fs.existsSync(src)) return;
+    try {
+        if (fs.statSync(src).size === 0) return;
+    } catch {
+        return;
+    }
+
+    const archiveDir = path.join(path.dirname(src), 'archive');
+    try {
+        fs.mkdirSync(archiveDir, { recursive: true });
+        const ext = path.extname(src);
+        const base = path.basename(src, ext);
+        const dst = path.join(archiveDir, `${base}_${ts}${ext}`);
+        fs.renameSync(src, dst);
+        console.log(`📦 [ARCHIVE] ${path.basename(src)} -> archive/${path.basename(dst)}`);
+    } catch (err) {
+        console.warn(`⚠️ [ARCHIVE] Falha ao arquivar ${src}: ${err.message}`);
+    }
 }
+
+function arquivarLogsAnteriores(ctx) {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+    arquivarArquivoLog(ctx.caminhos.log, ts);
+    arquivarArquivoLog(ctx.caminhos.erroLog, ts);
+}
+
+// =============================================================================
+// Validações de pasta e documentos
+// =============================================================================
 
 function validarCaminhoPasta(caminhoPasta) {
     if (typeof caminhoPasta !== 'string' || caminhoPasta.trim() === '') {
         return {
             ok: false,
-            erro: {
-                stage: 'invalid_path',
-                semRetry: true,
-                message: `Caminho de pasta inválido: ${String(caminhoPasta)}`,
-                extra: { caminhoPasta: caminhoPasta ?? null },
-            },
+            erro: erroSemRetry('invalid_path', `Caminho de pasta inválido: ${String(caminhoPasta)}`, {
+                caminhoPasta: caminhoPasta ?? null,
+            }),
         };
     }
 
     if (!fs.existsSync(caminhoPasta)) {
         return {
             ok: false,
-            erro: {
-                stage: 'invalid_path',
-                semRetry: true,
-                message: `Pasta não encontrada: ${caminhoPasta}`,
-                extra: { caminhoPasta },
-            },
+            erro: erroSemRetry('invalid_path', `Pasta não encontrada: ${caminhoPasta}`, { caminhoPasta }),
         };
     }
 
@@ -157,54 +225,78 @@ function validarCaminhoPasta(caminhoPasta) {
         if (!fs.lstatSync(caminhoPasta).isDirectory()) {
             return {
                 ok: false,
-                erro: {
-                    stage: 'invalid_path',
-                    semRetry: true,
-                    message: `Caminho não é diretório: ${caminhoPasta}`,
-                    extra: { caminhoPasta },
-                },
+                erro: erroSemRetry('invalid_path', `Caminho não é diretório: ${caminhoPasta}`, { caminhoPasta }),
             };
         }
     } catch (e) {
         return {
             ok: false,
-            erro: {
-                stage: 'invalid_path',
-                semRetry: true,
-                message: `Falha ao validar caminho da pasta: ${e.message}`,
-                extra: { caminhoPasta },
-            },
+            erro: erroSemRetry('invalid_path', `Falha ao validar caminho da pasta: ${e.message}`, { caminhoPasta }),
         };
     }
 
     return { ok: true };
 }
 
-function validarTamanhoDocumentos(caminhoPasta, nomesArquivos) {
-    if (!VALIDAR_TAMANHO_DOCUMENTOS) {
+function listarArquivosDaPasta(caminhoPasta) {
+    try {
+        return { ok: true, arquivos: fs.readdirSync(caminhoPasta) };
+    } catch (e) {
+        return {
+            ok: false,
+            erro: erroComRetry('read_dir', `Falha ao ler pasta: ${e.message}`, { caminhoPasta }),
+        };
+    }
+}
+
+function encontrarArquivosFaltantes(arquivos, obrigatorios) {
+    const nomesLower = new Set(arquivos.map((f) => f.toLowerCase()));
+    return obrigatorios.filter((nome) => !nomesLower.has(nome.toLowerCase()));
+}
+
+function validarArquivosObrigatorios(arquivos) {
+    const faltantes = encontrarArquivosFaltantes(arquivos, ARQUIVOS_PDF_OBRIGATORIOS);
+    if (faltantes.length === 0) {
+        return { ok: true };
+    }
+    return {
+        ok: false,
+        erro: erroComRetry(
+            'missing_files',
+            `Arquivos obrigatórios ausentes: ${faltantes.join(', ')}`,
+            { arquivosFaltantes: faltantes },
+        ),
+    };
+}
+
+function obterTamanhoArquivo(caminhoArquivo) {
+    try {
+        return fs.statSync(caminhoArquivo).size;
+    } catch {
+        return null;
+    }
+}
+
+function validarTamanhoDocumentos(ctx, caminhoPasta, nomesArquivos) {
+    if (!ctx.documentos.validarTamanho) {
         return { ok: true };
     }
 
+    const { tamanhoMaxBytes, tamanhoMaxMb } = ctx.documentos;
     const arquivosExcedidos = [];
 
     for (const nome of nomesArquivos) {
         const caminhoArquivo = path.join(caminhoPasta, nome);
-        let tamanhoBytes;
-        try {
-            tamanhoBytes = fs.statSync(caminhoArquivo).size;
-        } catch (e) {
-            continue;
-        }
+        const tamanhoBytes = obterTamanhoArquivo(caminhoArquivo);
+        if (tamanhoBytes == null || tamanhoBytes <= tamanhoMaxBytes) continue;
 
-        if (tamanhoBytes > TAMANHO_MAX_BYTES) {
-            arquivosExcedidos.push({
-                arquivo: nome,
-                caminhoArquivo,
-                tamanhoBytes,
-                tamanhoMB: Number((tamanhoBytes / 1024 / 1024).toFixed(2)),
-                limiteMB: TAMANHO_MAX_MB,
-            });
-        }
+        arquivosExcedidos.push({
+            arquivo: nome,
+            caminhoArquivo,
+            tamanhoBytes,
+            tamanhoMB: bytesParaMb(tamanhoBytes),
+            limiteMB: tamanhoMaxMb,
+        });
     }
 
     if (arquivosExcedidos.length === 0) {
@@ -217,294 +309,426 @@ function validarTamanhoDocumentos(caminhoPasta, nomesArquivos) {
 
     return {
         ok: false,
-        erro: {
-            stage: 'file_too_large',
-            semRetry: true,
-            message: `Documento(s) excedem o tamanho maximo permitido: ${lista}`,
-            extra: { arquivosExcedidos, limiteMB: TAMANHO_MAX_MB },
+        erro: erroSemRetry(
+            'file_too_large',
+            `Documento(s) excedem o tamanho maximo permitido: ${lista}`,
+            { arquivosExcedidos, limiteMB: tamanhoMaxMb },
+        ),
+    };
+}
+
+function aplicarValidacao(numPasta, validacao) {
+    return validacao.ok ? null : resultadoFalha(numPasta, validacao.erro);
+}
+
+// =============================================================================
+// Gemini e parse da resposta
+// =============================================================================
+
+function lerPdfComoInlineData(caminhoPasta, nomeArquivo) {
+    const caminhoCompleto = path.join(caminhoPasta, nomeArquivo);
+    return {
+        inlineData: {
+            mimeType: 'application/pdf',
+            data: fs.readFileSync(caminhoCompleto).toString('base64'),
         },
     };
 }
 
-async function processarPasta(numPasta, caminhoPasta, promptTemplate) {
-    const nomeArquivoEmail = "email.pdf";
-    const nomeArquivoDocBasico = "docbasico.pdf";
-
-    const validacao = validarCaminhoPasta(caminhoPasta);
-    if (!validacao.ok) {
-        return {
-            sucesso: false,
-            erro: {
-                numPasta,
-                ...validacao.erro,
-            },
-        };
-    }
-
-    let arquivos;
-    try {
-        arquivos = fs.readdirSync(caminhoPasta);
-    } catch (e) {
-        return {
-            sucesso: false,
-            erro: {
-                numPasta,
-                stage: 'read_dir',
-                message: `Falha ao ler pasta: ${e.message}`,
-                extra: { caminhoPasta },
-            },
-        };
-    }
-
-    const temEmail = arquivos.some(f => f.toLowerCase() === nomeArquivoEmail);
-    const temDocBasico = arquivos.some(f => f.toLowerCase() === nomeArquivoDocBasico);
-
-    if (!temEmail || !temDocBasico) {
-        const faltantes = [];
-        if (!temEmail) faltantes.push(nomeArquivoEmail);
-        if (!temDocBasico) faltantes.push(nomeArquivoDocBasico);
-        return {
-            sucesso: false,
-            erro: {
-                numPasta,
-                stage: 'missing_files',
-                message: `Arquivos obrigatórios ausentes: ${faltantes.join(', ')}`,
-                extra: { arquivosFaltantes: faltantes },
-            },
-        };
-    }
-
-    const arquivosObrigatorios = [nomeArquivoEmail, nomeArquivoDocBasico];
-    const validacaoTamanho = validarTamanhoDocumentos(caminhoPasta, arquivosObrigatorios);
-    if (!validacaoTamanho.ok) {
-        return {
-            sucesso: false,
-            erro: {
-                numPasta,
-                ...validacaoTamanho.erro,
-            },
-        };
-    }
-
-    const pdfsParaEnviar = arquivosObrigatorios.map(nome => {
-        const caminhoCompleto = path.join(caminhoPasta, nome);
-        return {
-            inlineData: {
-                mimeType: "application/pdf",
-                data: fs.readFileSync(caminhoCompleto).toString('base64'),
-            },
-        };
-    });
-
-    const promptFinal = promptTemplate.replace('{{numPasta}}', numPasta);
-
-    console.log(`🧠 [IA] Analisando ${nomeArquivoEmail} e ${nomeArquivoDocBasico}...`);
-
-    let result;
-    try {
-        result = await model.generateContent([...pdfsParaEnviar, { text: promptFinal }]);
-    } catch (err) {
-        return { sucesso: false, erro: { numPasta, stage: 'gemini_call', message: err.message } };
-    }
-    
-
-    let respostaTexto;
-    try {
-        respostaTexto = result.response.text().trim();
-    } catch (err) {
-        return { sucesso: false, erro: { numPasta, stage: 'parse_response', message: `Falha ao ler resposta da IA: ${err.message}` } };
-    }
-    console.log(`📝 [IA RESPOSTA]:\n${respostaTexto}`);
-
-    const linhas = respostaTexto.split('\n').filter(l => l.includes('|'));
-    if (linhas.length === 0) {
-        return {
-            sucesso: false,
-            erro: {
-                numPasta,
-                stage: 'parse_response',
-                message: 'IA retornou resposta em formato inválido.',
-                extra: { respostaTexto },
-            },
-        };
-    }
-
-    const stringFinalIA = linhas[linhas.length - 1].trim();
-
-    const payloadParaPlanilha = {
-        numPasta: numPasta,
-        respostaIA: stringFinalIA
-    };
-
-    // Extrai o status de forma simples apenas para exibição no log narrativo local do terminal
-    const partesLog = stringFinalIA.split('|');
-    const statusLog = partesLog[8] || "Processado";
-
-    gravarLog(`Resultado Pasta ${numPasta}: Status=${statusLog}`);
-
-    const resultadoPost = await postarNaPlanilha(payloadParaPlanilha, `Pasta ${numPasta}`);
-    if (!resultadoPost.ok) {
-        if (resultadoPost.httpStatus) {
-            return {
-                sucesso: false,
-                erro: {
-                    numPasta,
-                    stage: 'planilha_http',
-                    message: resultadoPost.message,
-                    extra: { httpStatus: resultadoPost.httpStatus, dados: payloadParaPlanilha },
-                },
-            };
-        }
-        return {
-            sucesso: false,
-            erro: {
-                numPasta,
-                stage: 'planilha_post',
-                message: resultadoPost.message,
-                extra: { dados: payloadParaPlanilha },
-            },
-        };
-    }
-
-    return { sucesso: true, status: statusLog };
+function montarPartesPdf(caminhoPasta, nomesArquivos) {
+    return nomesArquivos.map((nome) => lerPdfComoInlineData(caminhoPasta, nome));
 }
 
-async function processarTriagem() {
-    arquivarLogsAnteriores();
+function aplicarNumPastaNoPrompt(promptTemplate, numPasta) {
+    return promptTemplate.replace('{{numPasta}}', numPasta);
+}
 
-    const modoPlanilha = POSTAR_PLANILHA ? 'POST ativo' : 'DRY-RUN (apenas log JSON)';
-    const modoTamanho = VALIDAR_TAMANHO_DOCUMENTOS
-        ? `validacao ativa (max ${TAMANHO_MAX_MB} MB)`
-        : 'validacao de tamanho desativada';
-    const inicioMsg = `🚀 [SISTEMA] Iniciando Triagem BDD EAA-DVS (modelo=${MODELO_GEMINI}, planilha=${modoPlanilha}, documentos=${modoTamanho}, intervalo=${INTERVALO_PASTAS_MS}ms, retry=${RETRY_TENTATIVAS}x@${RETRY_INTERVALO_MS}ms)`;
-    console.log(inicioMsg);
-    gravarLog(inicioMsg);
+async function chamarGemini(ctx, partesPdf, promptFinal) {
+    try {
+        const result = await ctx.gemini.model.generateContent([...partesPdf, { text: promptFinal }]);
+        return { ok: true, result };
+    } catch (err) {
+        return { ok: false, erro: erroComRetry('gemini_call', err.message) };
+    }
+}
 
-    if (!fs.existsSync(PASTA_RAIZ) || !fs.existsSync(CAMINHO_PROMPT)) {
-        const erroMsg = "❌ [ERRO] Pasta raiz ou prompt.txt não encontrados.";
-        console.log(erroMsg);
-        gravarLog(erroMsg);
-        gravarErroFinal({
-            stage: 'startup',
-            message: erroMsg,
-            extra: {
-                pastaRaizExiste: fs.existsSync(PASTA_RAIZ),
-                promptExiste: fs.existsSync(CAMINHO_PROMPT),
-            },
-        });
-        return;
+function extrairTextoResposta(result) {
+    try {
+        return { ok: true, texto: result.response.text().trim() };
+    } catch (err) {
+        return {
+            ok: false,
+            erro: erroComRetry('parse_response', `Falha ao ler resposta da IA: ${err.message}`),
+        };
+    }
+}
+
+function extrairLinhaPipeFinal(respostaTexto) {
+    const linhas = respostaTexto.split('\n').filter((l) => l.includes('|'));
+    if (linhas.length === 0) {
+        return {
+            ok: false,
+            erro: erroComRetry('parse_response', 'IA retornou resposta em formato inválido.', { respostaTexto }),
+        };
+    }
+    return { ok: true, linhaFinal: linhas[linhas.length - 1].trim() };
+}
+
+function extrairStatusDaLinha(linhaFinal) {
+    const partes = linhaFinal.split('|');
+    return partes[8] || 'Processado';
+}
+
+function montarPayloadPlanilha(numPasta, respostaIA) {
+    return { numPasta, respostaIA };
+}
+
+// =============================================================================
+// Planilha
+// =============================================================================
+
+async function postarNaPlanilha(ctx, payload, rotulo = 'PLANILHA') {
+    const body = JSON.stringify(payload);
+
+    if (!ctx.planilha.postar) {
+        const msg = `📋 [DRY-RUN ${rotulo}] ${body}`;
+        logConsoleEArquivo(ctx, msg);
+        return { ok: true, dryRun: true };
     }
 
-    const pastas = fs.readdirSync(PASTA_RAIZ).filter(f => fs.lstatSync(path.join(PASTA_RAIZ, f)).isDirectory());
-    const promptTemplate = fs.readFileSync(CAMINHO_PROMPT, 'utf8');
+    try {
+        const resp = await fetch(ctx.integracao.urlPlanilha, { method: 'POST', body });
+        if (!resp.ok) {
+            return { ok: false, httpStatus: resp.status, message: `Status HTTP ${resp.status}` };
+        }
+        return { ok: true, httpStatus: resp.status };
+    } catch (err) {
+        return { ok: false, message: err.message };
+    }
+}
 
-    let contadorSucesso = 0;
+function resultadoErroPlanilha(numPasta, resultadoPost, payload) {
+    if (resultadoPost.httpStatus) {
+        return resultadoFalha(
+            numPasta,
+            erroComRetry('planilha_http', resultadoPost.message, {
+                httpStatus: resultadoPost.httpStatus,
+                dados: payload,
+            }),
+        );
+    }
+    return resultadoFalha(
+        numPasta,
+        erroComRetry('planilha_post', resultadoPost.message, { dados: payload }),
+    );
+}
+
+async function postarErroPlanilha(ctx, numPasta, erro) {
+    const mensagem = (erro && erro.message) || 'Erro desconhecido';
+    const payload = {
+        numPasta,
+        respostaIA: `${numPasta}|---|---|---|---|---|---|---|ERRO|0|${mensagem}|---|---|---|---|---`,
+    };
+
+    const resultado = await postarNaPlanilha(ctx, payload, `ERRO Pasta ${numPasta}`);
+    if (resultado.dryRun) return;
+
+    if (resultado.ok) {
+        gravarLog(ctx, `📤 [PLANILHA-ERRO] Pasta ${numPasta} reportada como ERRO na planilha.`);
+        return;
+    }
+    if (resultado.httpStatus) {
+        gravarLog(ctx, `⚠️ [PLANILHA-ERRO] Falha HTTP ${resultado.httpStatus} ao reportar pasta ${numPasta}.`);
+        return;
+    }
+    gravarLog(ctx, `⚠️ [PLANILHA-ERRO] Falha ao reportar pasta ${numPasta}: ${resultado.message}`);
+}
+
+// =============================================================================
+// Processamento de uma pasta
+// =============================================================================
+
+function validarPreRequisitosPasta(numPasta, caminhoPasta) {
+    const falhaCaminho = aplicarValidacao(numPasta, validarCaminhoPasta(caminhoPasta));
+    if (falhaCaminho) return falhaCaminho;
+
+    const listagem = listarArquivosDaPasta(caminhoPasta);
+    if (!listagem.ok) return resultadoFalha(numPasta, listagem.erro);
+
+    return aplicarValidacao(numPasta, validarArquivosObrigatorios(listagem.arquivos));
+}
+
+async function analisarComGemini(ctx, numPasta, caminhoPasta, promptTemplate) {
+    const partesPdf = montarPartesPdf(caminhoPasta, ARQUIVOS_PDF_OBRIGATORIOS);
+    const promptFinal = aplicarNumPastaNoPrompt(promptTemplate, numPasta);
+
+    console.log(`🧠 [IA] Analisando ${ARQUIVOS_PDF_OBRIGATORIOS.join(' e ')}...`);
+
+    const chamada = await chamarGemini(ctx, partesPdf, promptFinal);
+    if (!chamada.ok) return resultadoFalha(numPasta, chamada.erro);
+
+    const texto = extrairTextoResposta(chamada.result);
+    if (!texto.ok) return resultadoFalha(numPasta, texto.erro);
+
+    console.log(`📝 [IA RESPOSTA]:\n${texto.texto}`);
+
+    const linha = extrairLinhaPipeFinal(texto.texto);
+    if (!linha.ok) return resultadoFalha(numPasta, linha.erro);
+
+    return { ok: true, linhaFinal: linha.linhaFinal };
+}
+
+async function publicarResultadoPlanilha(ctx, numPasta, linhaFinal) {
+    const status = extrairStatusDaLinha(linhaFinal);
+    const payload = montarPayloadPlanilha(numPasta, linhaFinal);
+
+    gravarLog(ctx, `Resultado Pasta ${numPasta}: Status=${status}`);
+
+    const resultadoPost = await postarNaPlanilha(ctx, payload, `Pasta ${numPasta}`);
+    if (!resultadoPost.ok) {
+        return resultadoErroPlanilha(numPasta, resultadoPost, payload);
+    }
+
+    return resultadoSucesso(status);
+}
+
+async function processarPasta(ctx, numPasta, caminhoPasta, promptTemplate) {
+    const falhaPre = validarPreRequisitosPasta(numPasta, caminhoPasta);
+    if (falhaPre) return falhaPre;
+
+    const falhaTamanho = aplicarValidacao(
+        numPasta,
+        validarTamanhoDocumentos(ctx, caminhoPasta, ARQUIVOS_PDF_OBRIGATORIOS),
+    );
+    if (falhaTamanho) return falhaTamanho;
+
+    const analise = await analisarComGemini(ctx, numPasta, caminhoPasta, promptTemplate);
+    if (!analise.ok) return resultadoFalha(numPasta, analise.erro);
+
+    return publicarResultadoPlanilha(ctx, numPasta, analise.linhaFinal);
+}
+
+// =============================================================================
+// Orquestração da triagem (filas, retries, relatório final)
+// =============================================================================
+
+function rotuloFalhaSemRetry(stage) {
+    const rotulos = {
+        invalid_path: 'CAMINHO INVALIDO',
+        file_too_large: 'DOCUMENTO GRANDE',
+    };
+    return rotulos[stage] || 'FALHA DEFINITIVA';
+}
+
+function criarGerenciadorFilas(ctx) {
     const filaRetry = [];
     const filaErroDefinitivo = [];
 
-    function rotuloFalhaSemRetry(stage) {
-        if (stage === 'invalid_path') return 'CAMINHO INVALIDO';
-        if (stage === 'file_too_large') return 'DOCUMENTO GRANDE';
-        return 'FALHA DEFINITIVA';
-    }
-
     function encaminharFalha({ numPasta, tentativaAtual, ultimoErro }) {
-        if (ultimoErro && ultimoErro.semRetry) {
+        if (ultimoErro?.semRetry) {
             const rotulo = rotuloFalhaSemRetry(ultimoErro.stage);
-            const msg = `❌ [${rotulo}] Pasta ${numPasta} | ${ultimoErro.message}`;
-            console.log(msg);
-            gravarLog(msg);
+            logConsoleEArquivo(ctx, `❌ [${rotulo}] Pasta ${numPasta} | ${ultimoErro.message}`);
             filaErroDefinitivo.push({ numPasta, tentativaAtual, ultimoErro });
             return;
         }
-
         filaRetry.push({ numPasta, tentativaAtual, ultimoErro });
     }
 
-    // --- 1ª PASSADA ---
-    for (const numPasta of pastas) {
-        const caminhoPasta = montarCaminhoPasta(numPasta);
+    return { filaRetry, filaErroDefinitivo, encaminharFalha };
+}
 
-        console.log(`\n--- 🔎 AUDITORIA BDD: Pasta ${numPasta} ---`);
-        gravarLog(`Iniciando análise da Pasta: ${numPasta} | caminho=${caminhoPasta}`);
-        console.log(`📂 [CAMINHO] Pasta ${numPasta} | caminho=${caminhoPasta}`);
+function logInicioAuditoria(ctx, numPasta, caminhoPasta) {
+    console.log(`\n--- 🔎 AUDITORIA BDD: Pasta ${numPasta} ---`);
+    gravarLog(ctx, `Iniciando análise da Pasta: ${numPasta} | caminho=${caminhoPasta}`);
+    console.log(`📂 [CAMINHO] Pasta ${numPasta} | caminho=${caminhoPasta}`);
+}
 
-        const resultado = await processarPasta(numPasta, caminhoPasta, promptTemplate);
-        if (resultado.sucesso) {
-            console.log(`✅ [SUCESSO] Status: ${resultado.status}`);
-            contadorSucesso++;
-        } else {
-            const aviso = `⚠️ [WARN] Pasta ${numPasta} falhou (${resultado.erro.stage}): ${resultado.erro.message}.`;
-            console.log(aviso);
-            gravarLog(aviso);
-            encaminharFalha({ numPasta, tentativaAtual: 1, ultimoErro: resultado.erro });
-        }
+function logInicioRetry(ctx, rodada, numPasta, caminhoPasta) {
+    console.log(`\n--- 🔁 RETRY ${rodada}: Pasta ${numPasta} ---`);
+    gravarLog(ctx, `Retry ${rodada} da Pasta: ${numPasta} | caminho=${caminhoPasta}`);
+    console.log(`📂 [CAMINHO] Pasta ${numPasta} | caminho=${caminhoPasta}`);
+}
 
-        await sleep(INTERVALO_PASTAS_MS);
+function registrarResultadoPassada(ctx, filas, numPasta, resultado, tentativaAtual) {
+    if (resultado.sucesso) {
+        console.log(`✅ [SUCESSO] Status: ${resultado.status}`);
+        return { sucesso: true };
     }
 
-    // --- RETRIES ---
-    let rodada = 0;
-    while (filaRetry.length > 0 && rodada < RETRY_TENTATIVAS) {
-        rodada++;
-        const aviso = `\n🔁 [RETRY ${rodada}/${RETRY_TENTATIVAS}] Reprocessando ${filaRetry.length} pasta(s) pendente(s)...`;
-        console.log(aviso);
-        gravarLog(aviso);
+    const aviso = `⚠️ [WARN] Pasta ${numPasta} falhou (${resultado.erro.stage}): ${resultado.erro.message}.`;
+    logConsoleEArquivo(ctx, aviso);
+    filas.encaminharFalha({ numPasta, tentativaAtual, ultimoErro: resultado.erro });
+    return { sucesso: false };
+}
 
-        await sleep(RETRY_INTERVALO_MS);
+function registrarResultadoRetry(ctx, filas, rodada, item, resultado) {
+    if (resultado.sucesso) {
+        const ok = `✅ [RETRY ${rodada}] Pasta ${item.numPasta} OK. Status: ${resultado.status}`;
+        logConsoleEArquivo(ctx, ok);
+        return { sucesso: true, manterNaFila: false };
+    }
+
+    item.tentativaAtual = rodada + 1;
+    item.ultimoErro = resultado.erro;
+
+    const aviso = `⚠️ [WARN RETRY ${rodada}] Pasta ${item.numPasta} ainda falhou (${resultado.erro.stage}): ${resultado.erro.message}.`;
+    logConsoleEArquivo(ctx, aviso);
+
+    if (resultado.erro?.semRetry) {
+        filas.encaminharFalha({
+            numPasta: item.numPasta,
+            tentativaAtual: item.tentativaAtual,
+            ultimoErro: resultado.erro,
+        });
+        return { sucesso: false, manterNaFila: false };
+    }
+
+    return { sucesso: false, manterNaFila: true };
+}
+
+function listarPastasNumeradas(ctx) {
+    return fs
+        .readdirSync(ctx.caminhos.pastaRaiz)
+        .filter((nome) => fs.lstatSync(path.join(ctx.caminhos.pastaRaiz, nome)).isDirectory());
+}
+
+function lerPromptTemplate(ctx) {
+    return fs.readFileSync(ctx.caminhos.prompt, 'utf8');
+}
+
+function verificarAmbienteInicial(ctx) {
+    const pastaRaizExiste = fs.existsSync(ctx.caminhos.pastaRaiz);
+    const promptExiste = fs.existsSync(ctx.caminhos.prompt);
+
+    if (pastaRaizExiste && promptExiste) {
+        return true;
+    }
+
+    const erroMsg = '❌ [ERRO] Pasta raiz ou prompt.txt não encontrados.';
+    logConsoleEArquivo(ctx, erroMsg);
+    gravarErroFinal(ctx, {
+        stage: 'startup',
+        message: erroMsg,
+        extra: { pastaRaizExiste, promptExiste },
+    });
+    return false;
+}
+
+function montarMensagemInicio(ctx) {
+    const modoPlanilha = ctx.planilha.postar ? 'POST ativo' : 'DRY-RUN (apenas log JSON)';
+    const modoTamanho = ctx.documentos.validarTamanho
+        ? `validacao ativa (max ${ctx.documentos.tamanhoMaxMb} MB)`
+        : 'validacao de tamanho desativada';
+
+    return (
+        `🚀 [SISTEMA] Iniciando Triagem BDD EAA-DVS ` +
+        `(modelo=${ctx.gemini.modelo}, planilha=${modoPlanilha}, documentos=${modoTamanho}, ` +
+        `intervalo=${ctx.triagem.intervaloPastasMs}ms, ` +
+        `retry=${ctx.triagem.retryTentativas}x@${ctx.triagem.retryIntervaloMs}ms)`
+    );
+}
+
+async function executarPrimeiraPassada(ctx, filas, pastas, promptTemplate) {
+    let contadorSucesso = 0;
+
+    for (const numPasta of pastas) {
+        const caminhoPasta = montarCaminhoPasta(ctx, numPasta);
+        logInicioAuditoria(ctx, numPasta, caminhoPasta);
+
+        const resultado = await processarPasta(ctx, numPasta, caminhoPasta, promptTemplate);
+        const registro = registrarResultadoPassada(ctx, filas, numPasta, resultado, 1);
+        if (registro.sucesso) contadorSucesso++;
+
+        await sleep(ctx.triagem.intervaloPastasMs);
+    }
+
+    return contadorSucesso;
+}
+
+async function executarRodadasRetry(ctx, filas, promptTemplate) {
+    let contadorSucesso = 0;
+    const { retryTentativas, retryIntervaloMs, intervaloPastasMs } = ctx.triagem;
+
+    let rodada = 0;
+    while (filas.filaRetry.length > 0 && rodada < retryTentativas) {
+        rodada++;
+        logConsoleEArquivo(
+            ctx,
+            `\n🔁 [RETRY ${rodada}/${retryTentativas}] Reprocessando ${filas.filaRetry.length} pasta(s) pendente(s)...`,
+        );
+
+        await sleep(retryIntervaloMs);
 
         const aindaFalhando = [];
-        for (const item of filaRetry) {
-            const caminhoPasta = montarCaminhoPasta(item.numPasta);
-            console.log(`\n--- 🔁 RETRY ${rodada}: Pasta ${item.numPasta} ---`);
-            gravarLog(`Retry ${rodada} da Pasta: ${item.numPasta} | caminho=${caminhoPasta}`);
-            console.log(`📂 [CAMINHO] Pasta ${item.numPasta} | caminho=${caminhoPasta}`);
+        for (const item of filas.filaRetry) {
+            const caminhoPasta = montarCaminhoPasta(ctx, item.numPasta);
+            logInicioRetry(ctx, rodada, item.numPasta, caminhoPasta);
 
-            const resultado = await processarPasta(item.numPasta, caminhoPasta, promptTemplate);
-            if (resultado.sucesso) {
-                const ok = `✅ [RETRY ${rodada}] Pasta ${item.numPasta} OK. Status: ${resultado.status}`;
-                console.log(ok);
-                gravarLog(ok);
-                contadorSucesso++;
-            } else {
-                item.tentativaAtual = rodada + 1;
-                item.ultimoErro = resultado.erro;
-                const aviso = `⚠️ [WARN RETRY ${rodada}] Pasta ${item.numPasta} ainda falhou (${resultado.erro.stage}): ${resultado.erro.message}.`;
-                console.log(aviso);
-                gravarLog(aviso);
-                if (resultado.erro && resultado.erro.semRetry) {
-                    encaminharFalha({
-                        numPasta: item.numPasta,
-                        tentativaAtual: item.tentativaAtual,
-                        ultimoErro: resultado.erro,
-                    });
-                } else {
-                    aindaFalhando.push(item);
-                }
-            }
+            const resultado = await processarPasta(ctx, item.numPasta, caminhoPasta, promptTemplate);
+            const registro = registrarResultadoRetry(ctx, filas, rodada, item, resultado);
 
-            await sleep(INTERVALO_PASTAS_MS);
+            if (registro.sucesso) contadorSucesso++;
+            if (registro.manterNaFila) aindaFalhando.push(item);
+
+            await sleep(intervaloPastasMs);
         }
 
-        filaRetry.length = 0;
-        filaRetry.push(...aindaFalhando);
+        filas.filaRetry.length = 0;
+        filas.filaRetry.push(...aindaFalhando);
     }
 
-    // --- FALHAS DEFINITIVAS ---
-    const filaFalhasFinais = [...filaErroDefinitivo, ...filaRetry];
+    return contadorSucesso;
+}
+
+async function finalizarFalhasDefinitivas(ctx, filas) {
+    const filaFalhasFinais = [...filas.filaErroDefinitivo, ...filas.filaRetry];
+
     for (const item of filaFalhasFinais) {
-        gravarErroFinal({ ...item.ultimoErro, tentativas: item.tentativaAtual });
-        gravarLog(`❌ [FALHA DEFINITIVA] Pasta ${item.numPasta} apos ${item.tentativaAtual} tentativas: ${item.ultimoErro.message}`);
-        await postarErroPlanilha(item.numPasta, item.ultimoErro);
+        gravarErroFinal(ctx, { ...item.ultimoErro, tentativas: item.tentativaAtual });
+        gravarLog(
+            ctx,
+            `❌ [FALHA DEFINITIVA] Pasta ${item.numPasta} apos ${item.tentativaAtual} tentativas: ${item.ultimoErro.message}`,
+        );
+        await postarErroPlanilha(ctx, item.numPasta, item.ultimoErro);
     }
-    const contadorFalha = filaFalhasFinais.length;
 
+    return filaFalhasFinais.length;
+}
+
+function registrarConclusao(ctx, contadorSucesso, contadorFalha) {
     const fimMsg = `🏁 Triagem concluída. Sucesso: ${contadorSucesso} | Falhas definitivas: ${contadorFalha}`;
     console.log(fimMsg);
-    gravarLog(fimMsg + "\n" + "=".repeat(50));
+    gravarLog(ctx, `${fimMsg}\n${'='.repeat(50)}`);
     if (contadorFalha > 0) {
-        console.log(`📄 Detalhes das falhas em: ${CAMINHO_ERRO_LOG}`);
+        console.log(`📄 Detalhes das falhas em: ${ctx.caminhos.erroLog}`);
     }
 }
 
-processarTriagem();
+async function processarTriagem() {
+    const ctx = criarContexto();
+    inicializarGemini(ctx);
+
+    arquivarLogsAnteriores(ctx);
+    logConsoleEArquivo(ctx, montarMensagemInicio(ctx));
+
+    if (!verificarAmbienteInicial(ctx)) return;
+
+    const pastas = listarPastasNumeradas(ctx);
+    const promptTemplate = lerPromptTemplate(ctx);
+    const filas = criarGerenciadorFilas(ctx);
+
+    const sucessoPassada = await executarPrimeiraPassada(ctx, filas, pastas, promptTemplate);
+    const sucessoRetry = await executarRodadasRetry(ctx, filas, promptTemplate);
+    const contadorFalha = await finalizarFalhasDefinitivas(ctx, filas);
+
+    registrarConclusao(ctx, sucessoPassada + sucessoRetry, contadorFalha);
+}
+
+// =============================================================================
+// Entry point
+// =============================================================================
+
+processarTriagem().catch((err) => {
+    console.error('❌ [ERRO FATAL]', err);
+    process.exit(1);
+});
