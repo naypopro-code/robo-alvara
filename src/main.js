@@ -379,6 +379,88 @@ function extrairStatusDaLinha(linhaFinal) {
     return partes[8] || 'Processado';
 }
 
+function normalizarTextoColuna(valor) {
+    return String(valor || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+}
+
+function valorIndicaAusencia(valor) {
+    const v = normalizarTextoColuna(valor);
+    return v === '' || v === '---' || v === 'ausencia' || v === 'nao encontrado';
+}
+
+function contratoSocialNaoSeAplica(valor) {
+    const v = normalizarTextoColuna(valor);
+    return v.includes('nao se aplica');
+}
+
+function parsearLinhaResultado(linhaFinal) {
+    const partes = linhaFinal.split('|').map((p) => p.trim());
+    return {
+        partes,
+        documentacaoCompleta: partes[6],
+        status: partes[8],
+        motivo: partes[10],
+        pagRequerimento: partes[11],
+        pagCnpjOuIdentidade: partes[12],
+        pagContratoSocial: partes[13],
+    };
+}
+
+function detectarAusenciasObrigatorias(campos) {
+    const ausencias = [];
+    if (valorIndicaAusencia(campos.pagRequerimento)) {
+        ausencias.push('Requerimento');
+    }
+    if (valorIndicaAusencia(campos.pagCnpjOuIdentidade)) {
+        ausencias.push('CNPJ/Identidade');
+    }
+    if (!contratoSocialNaoSeAplica(campos.pagContratoSocial) && valorIndicaAusencia(campos.pagContratoSocial)) {
+        ausencias.push('Contrato Social');
+    }
+    return ausencias;
+}
+
+function aplicarRegrasConsistenciaBdd(ctx, linhaFinal) {
+    const campos = parsearLinhaResultado(linhaFinal);
+    if (campos.partes.length < 14) {
+        return { linhaFinal, corrigido: false };
+    }
+
+    const ausencias = detectarAusenciasObrigatorias(campos);
+    if (ausencias.length === 0) {
+        return { linhaFinal, corrigido: false };
+    }
+
+    const statusAtual = normalizarTextoColuna(campos.status);
+    const docCompletaAtual = normalizarTextoColuna(campos.documentacaoCompleta);
+    const statusInvalidoParaAusencia =
+        statusAtual.includes('valido') ||
+        statusAtual.includes('divergencia de dados') ||
+        docCompletaAtual === 'sim';
+
+    if (!statusInvalidoParaAusencia) {
+        return { linhaFinal, corrigido: false };
+    }
+
+    campos.partes[6] = 'Não';
+    campos.partes[8] = 'Ausência de doc obrigatório';
+    campos.partes[10] =
+        `Correção automática: ausência de ${ausencias.join(', ')} no docbasico.pdf. ` +
+        `(IA havia retornado Status="${campos.status}" / DocCompleta="${campos.documentacaoCompleta}")`;
+
+    const linhaCorrigida = campos.partes.join('|');
+    gravarLog(
+        ctx,
+        `⚙️ [CORRECAO BDD] Ausência detectada (${ausencias.join(', ')}): linha ajustada para DocCompleta=Não e Status=Ausência de doc obrigatório.`,
+    );
+
+    return { linhaFinal: linhaCorrigida, corrigido: true, ausencias };
+}
+
 function montarPayloadPlanilha(numPasta, respostaIA) {
     return { numPasta, respostaIA };
 }
@@ -479,8 +561,13 @@ async function analisarComGemini(ctx, numPasta, caminhoPasta, promptTemplate) {
 }
 
 async function publicarResultadoPlanilha(ctx, numPasta, linhaFinal) {
-    const status = extrairStatusDaLinha(linhaFinal);
-    const payload = montarPayloadPlanilha(numPasta, linhaFinal);
+    const { linhaFinal: linhaAjustada, corrigido } = aplicarRegrasConsistenciaBdd(ctx, linhaFinal);
+    if (corrigido) {
+        console.log(`⚙️ [CORRECAO BDD] Pasta ${numPasta}: resultado ajustado por ausência de documento obrigatório.`);
+    }
+
+    const status = extrairStatusDaLinha(linhaAjustada);
+    const payload = montarPayloadPlanilha(numPasta, linhaAjustada);
 
     gravarLog(ctx, `Resultado Pasta ${numPasta}: Status=${status}`);
 

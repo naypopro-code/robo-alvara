@@ -15,10 +15,8 @@ robo-alvara/
 ├── data/
 │   └── documentos/          ← subpastas numeradas com PDFs (256/, etc.) — gitignored
 ├── exec/
-│   ├── configurar-projeto-inicial.bat  ← bootstrap (Node + Git portable + npm + setup)
-│   ├── baixar-git.bat       ← baixa/extrai MinGit (Git portable)
-│   ├── git-configurar.bat   ← configura user/email + SSH para GitHub
-│   ├── atualizar-robo.bat   ← pull + add -A + commit auto + push (Git portable)
+│   ├── configurar-projeto-inicial.bat  ← bootstrap (Node + npm install + setup)
+│   ├── atualizar-robo.bat   ← baixa ZIP do GitHub e atualiza o projeto
 │   ├── executar.bat         ← roda src/main.js
 │   ├── lista.bat            ← roda src/lista.js
 │   └── teste-planilha.bat   ← roda src/testePlanilha.js
@@ -38,10 +36,11 @@ robo-alvara/
 Clique duas vezes em **`exec\configurar-projeto-inicial.bat`**. Ele faz tudo:
 
 1. Baixa o Node.js bundled (`node-v25.9.0-win-x64`) de `nodejs.org` e extrai na raiz do projeto.
-2. Baixa o Git portable (`MinGit-2.49.0-64-bit`) e extrai na raiz do projeto.
-3. Roda `npm install` usando o npm bundled.
-4. Cria a pasta `data\`.
-5. Cria `config\config.json` a partir do `config.sample.json` (se ainda não existir).
+2. Roda `npm install` usando o npm bundled.
+3. Cria as pastas `data\` e `data\documentos\`.
+4. Cria `config\config.json` a partir do `config.sample.json` (se ainda não existir).
+
+Guia completo para PO: [`docs/GUIA-ATUALIZACAO-PO.md`](docs/GUIA-ATUALIZACAO-PO.md)
 
 Depois, edite `config\config.json` (organizado por grupos; campos na raiz ainda funcionam por compatibilidade):
 
@@ -68,35 +67,17 @@ Depois, edite `config\config.json` (organizado por grupos; campos na raiz ainda 
 ### 1) Setup do projeto
 
 - **Arquivo:** `exec\configurar-projeto-inicial.bat`
-- **O que faz:** prepara Node bundled, Git portable, dependências e config inicial.
+- **O que faz:** prepara Node bundled, dependências e config inicial.
 
 ```cmd
 exec\configurar-projeto-inicial.bat
 ```
 
-### 2) Baixar Git portable (isolado)
-
-- **Arquivo:** `exec\baixar-git.bat`
-- **O que faz:** baixa e extrai `MinGit-2.49.0-64-bit` na raiz do projeto.
-
-```cmd
-exec\baixar-git.bat
-```
-
-### 3) Configurar GitHub (user/email + chave SSH)
-
-- **Arquivo:** `exec\git-configurar.bat`
-- **O que faz:** pergunta nome/email, gera chave `ed25519`, tenta adicionar no `ssh-agent`, copia chave pública e mostra passo a passo para cadastrar no GitHub.
-
-```cmd
-exec\git-configurar.bat
-```
-
-### 4) Atualizar repositório e publicar alterações
+### 2) Atualizar código (download GitHub ZIP)
 
 - **Arquivo principal:** `exec\atualizar-robo.bat`
 - **Atalho:** `atualizar-robo.bat` (na raiz)
-- **O que faz:** `git pull --rebase` + `git add -A` + commit automático (timestamp) + `git push`, usando Git portable.
+- **O que faz:** baixa `main.zip` do GitHub, extrai e copia para a pasta de destino (padrão: `C:\Users\nayarapb\Documents\Teste_Robo_EAA_DVS`), preservando `config.json` e `data\documentos\`.
 
 ```cmd
 exec\atualizar-robo.bat
@@ -108,7 +89,7 @@ ou:
 atualizar-robo.bat
 ```
 
-### 5) Rodar o robô e utilitários
+### 3) Rodar o robô e utilitários
 
 - **Triagem principal (`src\main.js`):**
 
