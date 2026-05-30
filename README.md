@@ -40,9 +40,7 @@ Clique duas vezes em **`exec\configurar-projeto-inicial.bat`**. Ele faz tudo:
 3. Cria as pastas `data\` e `data\documentos\`.
 4. Cria `config\config.json` a partir do `config.sample.json` (se ainda não existir).
 
-Guia completo para PO: [`docs/GUIA-ATUALIZACAO-PO.md`](docs/GUIA-ATUALIZACAO-PO.md)
-
-Depois, edite `config\config.json` (organizado por grupos; campos na raiz ainda funcionam por compatibilidade):
+Depois, edite `config\config.json`:
 
 | Grupo | Campo | Default | Descrição |
 |---|---|---|---|
@@ -62,6 +60,88 @@ Depois, edite `config\config.json` (organizado por grupos; campos na raiz ainda 
 
 `config\config.json` está no `.gitignore` e nunca deve ser commitado.
 
+## Como atualizar o projeto
+
+Atualização **sem Git**: o script baixa o código direto do GitHub em ZIP.
+
+**URL do pacote:**
+```
+https://github.com/naypopro-code/robo-alvara/archive/refs/heads/main.zip
+```
+
+**Pré-requisitos:** Windows, internet e permissão de escrita na pasta de instalação.
+
+### Primeira instalação
+
+1. Execute (duplo clique):
+   ```cmd
+   exec\atualizar-robo.bat
+   ```
+   (ou `atualizar-robo.bat` na raiz do projeto)
+
+2. Confirme a pasta de destino. Padrão:
+   ```
+   C:\Users\nayarapb\Documents\Teste_Robo_EAA_DVS
+   ```
+   Pressione **Enter** para aceitar ou digite outro caminho. Confirme com **S**.
+
+3. Aguarde as etapas `[1/5]` a `[5/5]`.
+
+4. Rode o setup:
+   ```cmd
+   exec\configurar-projeto-inicial.bat
+   ```
+
+5. Edite `config\config.json`:
+   - `integracao.chaveGemini`
+   - `integracao.urlPlanilha`
+   - `caminhos.pastaDocumentos` (ex.: `C:\...\01_documentos_alvara`)
+
+6. Coloque os PDFs em subpastas numeradas dentro de `pastaDocumentos` (`252\`, `307\`, etc.), cada uma com `email.pdf` e `docbasico.pdf`.
+
+7. Execute a triagem:
+   ```cmd
+   exec\executar.bat
+   ```
+
+### Atualizar versão do código
+
+Use quando houver nova versão no GitHub, **sem perder** configuração nem PDFs.
+
+1. Feche o robô se estiver rodando.
+2. Execute:
+   ```cmd
+   exec\atualizar-robo.bat
+   ```
+3. Confirme a pasta de destino (padrão: `C:\Users\nayarapb\Documents\Teste_Robo_EAA_DVS`).
+4. Aguarde a conclusão.
+
+**Preservado automaticamente:**
+
+| Item | Preservado? |
+|------|-------------|
+| `config\config.json` | Sim |
+| `data\documentos\` (PDFs) | Sim |
+| `node-v25.9.0-win-x64\` | Sim |
+
+5. Se houver mudança de dependências, rode novamente:
+   ```cmd
+   exec\configurar-projeto-inicial.bat
+   ```
+6. Execute a triagem:
+   ```cmd
+   exec\executar.bat
+   ```
+
+### Solução de problemas (atualização)
+
+| Problema | Ação |
+|----------|------|
+| Falha no download | Verifique internet; tente novamente |
+| Pasta de destino incorreta | Rode de novo e digite o caminho correto |
+| `config.json` sumiu | Copie de `config\config.sample.json` e preencha |
+| Erro ao executar | Rode `exec\configurar-projeto-inicial.bat` |
+
 ## Scripts `.bat` e exemplos de uso
 
 ### 1) Setup do projeto
@@ -75,18 +155,10 @@ exec\configurar-projeto-inicial.bat
 
 ### 2) Atualizar código (download GitHub ZIP)
 
-- **Arquivo principal:** `exec\atualizar-robo.bat`
-- **Atalho:** `atualizar-robo.bat` (na raiz)
-- **O que faz:** baixa `main.zip` do GitHub, extrai e copia para a pasta de destino (padrão: `C:\Users\nayarapb\Documents\Teste_Robo_EAA_DVS`), preservando `config.json` e `data\documentos\`.
+Ver seção [Como atualizar o projeto](#como-atualizar-o-projeto).
 
 ```cmd
 exec\atualizar-robo.bat
-```
-
-ou:
-
-```cmd
-atualizar-robo.bat
 ```
 
 ### 3) Rodar o robô e utilitários
