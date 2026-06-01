@@ -1,0 +1,13 @@
+{
+    "_comentario": "Copie para config/atualizacao.json (opcional). Usado por exec/atualizar-robo.bat",
+
+    "github": {
+        "owner": "naypopro-code",
+        "repo": "robo-alvara",
+        "branch": "main"
+    },
+
+    "zipUrl": "",
+
+    "destinoPadrao": "C:\\Users\\nayarapb\\Documents\\Teste_Robo_EAA_DVS"
+}

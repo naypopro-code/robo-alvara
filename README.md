@@ -137,10 +137,34 @@ Use quando houver nova versão no GitHub, **sem perder** configuração nem PDFs
 
 | Problema | Ação |
 |----------|------|
+| **404 ao baixar** | Repositório privado ou ainda não publicado no GitHub (veja abaixo) |
 | Falha no download | Verifique internet; tente novamente |
 | Pasta de destino incorreta | Rode de novo e digite o caminho correto |
 | `config.json` sumiu | Copie de `config\config.sample.json` e preencha |
 | Erro ao executar | Rode `exec\configurar-projeto-inicial.bat` |
+
+#### Erro 404 no download
+
+O GitHub retorna **404** quando o repositório **não existe publicamente** ou é **privado**.
+
+**Opção A — Tornar o repositório público**  
+Publicar `naypopro-code/robo-alvara` no GitHub e rodar `exec\atualizar-robo.bat` de novo.
+
+**Opção B — Repositório privado (token)**  
+No CMD, antes de atualizar:
+```cmd
+set GITHUB_TOKEN=ghp_seu_token_aqui
+exec\atualizar-robo.bat
+```
+Crie o token em GitHub → Settings → Developer settings → Personal access tokens (scope `repo`).
+
+**Opção C — ZIP manual**  
+Baixe o ZIP pelo GitHub (Code → Download ZIP) e rode:
+```cmd
+exec\atualizar-robo.bat "C:\Users\nayarapb\Documents\Teste_Robo_EAA_DVS" "C:\Downloads\robo-alvara-main.zip"
+```
+
+Opcional: copie `config\atualizacao.sample.json` para `config\atualizacao.json` e ajuste `github.owner`, `github.repo`, `github.branch` ou `zipUrl`.
 
 ## Scripts `.bat` e exemplos de uso
 
