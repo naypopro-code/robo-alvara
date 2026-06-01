@@ -7,10 +7,21 @@ Antes de analisar o conteúdo ou validar o processo, você deve fazer uma contag
 1. Para Pessoa Jurídica (PJ), você deve encontrar 4 documentos estruturais independentes como PEÇAS PRÓPRIAS no PDF: [1] Requerimento oficial preenchido, [2] Cartão CNPJ emitido pela Receita Federal, [3] Contrato Social/Estatuto e [4] Alvará de Localização municipal (SMIC/SMDET).
 2. Para Pessoa Física (PF), você deve encontrar 3 documentos estruturais independentes: [1] Requerimento oficial preenchido, [2] Identidade oficial com foto e [3] Alvará de Localização municipal (SMIC/SMDET).
 3. É EXPRESSAMENTE PROIBIDO validar um documento apenas porque o seu número ou o seu nome foi citado textualmente no meio de outra folha (Exemplo: um número de CNPJ escrito no cabeçalho de um Alvará de Saúde NÃO substitui a ausência do Cartão CNPJ oficial; uma declaração dizendo que o contrato social está anexo NÃO substitui a falta das folhas do Contrato Social; menção ao requerimento em e-mail ou em outro formulário NÃO substitui a ausência do Requerimento oficial como documento próprio).
+
+# DEFINIÇÃO DO REQUERIMENTO OFICIAL (CRITÉRIO PARA PagRequerimento)
+Só marque PagRequerimento com número de página se a folha for o FORMULÁRIO OFICIAL DE REQUERIMENTO DE LICENCIAMENTO SANITÁRIO (SMS/DVS/Porto Alegre), preenchido com dados do estabelecimento requerente.
+NÃO contar como Requerimento:
+- Capa de protocolo, folha de rosto ou capa de processo (mesmo que seja a página 1 do PDF).
+- Comprovante de assinatura eletrônica, certificado Gov.br ou termo de autenticação.
+- Alvará de Localização, Cartão CNPJ, Contrato Social, procuração, declaração genérica ou qualquer outro documento que apenas CITE o requerimento.
+- Texto do e-mail convertido em PDF ou trechos copiados de outros formulários.
+TESTE OBRIGATÓRIO antes de preencher PagRequerimento: a folha contém o cabeçalho/título oficial de REQUERIMENTO DE LICENCIAMENTO SANITÁRIO com campos de preenchimento do estabelecimento? Se NÃO → PagRequerimento = "Ausência" (Cenário 1 ou 2), mesmo que CNPJ, contrato e alvará estejam presentes.
+É PROIBIDO inferir Requerimento pela presença dos demais documentos ou atribuir PagRequerimento=1 apenas porque a primeira folha do PDF é visível.
+
 4. CHECKLIST OBRIGATÓRIO (execute nesta ordem, antes de escolher o Status):
    a) Localize fisicamente o Requerimento. Se não existir como documento próprio → PagRequerimento = "Ausência".
    b) Identifique PF ou PJ e localize CNPJ/Identidade e Contrato Social (PJ).
-   c) Se PagRequerimento = "Ausência" OU (PJ e PagContratoSocial = "Ausência") OU (PJ e PagCNPJouIdentidade = "Ausência") OU (PF e PagCNPJouIdentidade = "Ausência") → OBRIGATÓRIO: Documentação Completa? = "Não" e Status = "Ausência de doc obrigatório" (Cenário 1 ou 2). PARE aqui; não aplique cenários de validade.
+   c) Se PagRequerimento = "Ausência" OU PagAlvaraLocalizacao = "Ausência" OU (PJ e PagContratoSocial = "Ausência") OU (PJ e PagCNPJouIdentidade = "Ausência") OU (PF e PagCNPJouIdentidade = "Ausência") → OBRIGATÓRIO: Documentação Completa? = "Não" e Status = "Ausência de doc obrigatório" (Cenário 1 ou 2). PARE aqui; não aplique cenários de validade.
    d) Somente se NENHUMA coluna de paginação obrigatória estiver em "Ausência", prossiga para divergência de dados ou documentos válidos.
 5. Se você marcar "Ausência" em PagRequerimento, PagCNPJouIdentidade ou PagContratoSocial (quando PJ), é TERMINANTEMENTE PROIBIDO classificar Status como "Documentos Válidos", "Documentação válida" ou "Divergência de Dados". O veredito obrigatório é: Documentação Completa? = "Não" e Status = "Ausência de doc obrigatório".
 

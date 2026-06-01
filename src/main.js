@@ -389,7 +389,40 @@ function normalizarTextoColuna(valor) {
 
 function valorIndicaAusencia(valor) {
     const v = normalizarTextoColuna(valor);
-    return v === '' || v === '---' || v === 'ausencia' || v === 'nao encontrado';
+    return (
+        v === '' ||
+        v === '---' ||
+        v === 'ausencia' ||
+        v === 'nao encontrado' ||
+        v === 'nao localizado' ||
+        v === 'inexistente' ||
+        v === 'n/a'
+    );
+}
+
+function statusIndicaDocumentacaoValida(status) {
+    const s = normalizarTextoColuna(status);
+    return (
+        s.includes('valido') ||
+        s.includes('valida') ||
+        s.includes('divergencia de dados') ||
+        s.includes('cnpj divergente')
+    );
+}
+
+function statusIndicaAusenciaDocObrigatorio(status) {
+    return normalizarTextoColuna(status).includes('ausencia de doc obrigatorio');
+}
+
+function motivoIndicaCenarioIncompleto(motivo) {
+    const m = normalizarTextoColuna(motivo);
+    return (
+        m.includes('cenario 1') ||
+        m.includes('cenario 2') ||
+        m.includes('faltam documentos obrigatorios') ||
+        (m.includes('requerimento') &&
+            (m.includes('ausent') || m.includes('falt') || m.includes('nao encontr')))
+    );
 }
 
 function contratoSocialNaoSeAplica(valor) {
@@ -407,6 +440,7 @@ function parsearLinhaResultado(linhaFinal) {
         pagRequerimento: partes[11],
         pagCnpjOuIdentidade: partes[12],
         pagContratoSocial: partes[13],
+        pagAlvaraLocalizacao: partes[14],
     };
 }
 
@@ -421,7 +455,43 @@ function detectarAusenciasObrigatorias(campos) {
     if (!contratoSocialNaoSeAplica(campos.pagContratoSocial) && valorIndicaAusencia(campos.pagContratoSocial)) {
         ausencias.push('Contrato Social');
     }
+    if (valorIndicaAusencia(campos.pagAlvaraLocalizacao)) {
+        ausencias.push('Alvará de Localização');
+    }
     return ausencias;
+}
+
+function detectarAusenciasPorMotivo(campos) {
+    if (!motivoIndicaCenarioIncompleto(campos.motivo)) {
+        return [];
+    }
+
+    const ausencias = [];
+    const m = normalizarTextoColuna(campos.motivo);
+
+    if (
+        m.includes('requerimento') &&
+        !valorIndicaAusencia(campos.pagRequerimento)
+    ) {
+        ausencias.push('Requerimento');
+        campos.partes[11] = 'Ausência';
+        campos.pagRequerimento = 'Ausência';
+    }
+
+    return ausencias;
+}
+
+function forcarAusenciaDocObrigatorio(campos, ausencias, origemCorrecao) {
+    const statusAnterior = campos.status;
+    const docAnterior = campos.documentacaoCompleta;
+
+    campos.partes[6] = 'Não';
+    campos.partes[8] = 'Ausência de doc obrigatório';
+    campos.partes[10] =
+        `${origemCorrecao}: ausência de ${ausencias.join(', ')} no docbasico.pdf. ` +
+        `(IA havia retornado Status="${statusAnterior}" / DocCompleta="${docAnterior}")`;
+
+    return campos.partes.join('|');
 }
 
 function aplicarRegrasConsistenciaBdd(ctx, linhaFinal) {
@@ -430,35 +500,51 @@ function aplicarRegrasConsistenciaBdd(ctx, linhaFinal) {
         return { linhaFinal, corrigido: false };
     }
 
-    const ausencias = detectarAusenciasObrigatorias(campos);
-    if (ausencias.length === 0) {
-        return { linhaFinal, corrigido: false };
-    }
+    const ausenciasPaginacao = detectarAusenciasObrigatorias(campos);
+    const ausenciasMotivo = detectarAusenciasPorMotivo(campos);
+    const ausencias = [...new Set([...ausenciasPaginacao, ...ausenciasMotivo])];
 
-    const statusAtual = normalizarTextoColuna(campos.status);
     const docCompletaAtual = normalizarTextoColuna(campos.documentacaoCompleta);
-    const statusInvalidoParaAusencia =
-        statusAtual.includes('valido') ||
-        statusAtual.includes('divergencia de dados') ||
-        docCompletaAtual === 'sim';
+    const statusAtual = normalizarTextoColuna(campos.status);
+    let corrigido = false;
+    let linhaCorrigida = linhaFinal;
 
-    if (!statusInvalidoParaAusencia) {
-        return { linhaFinal, corrigido: false };
+    if (ausencias.length > 0) {
+        const precisaCorrigir =
+            docCompletaAtual === 'sim' ||
+            statusIndicaDocumentacaoValida(campos.status) ||
+            !statusIndicaAusenciaDocObrigatorio(campos.status);
+
+        if (precisaCorrigir) {
+            linhaCorrigida = forcarAusenciaDocObrigatorio(campos, ausencias, 'Correção automática');
+            corrigido = true;
+        }
+    } else if (statusIndicaAusenciaDocObrigatorio(campos.status) && docCompletaAtual === 'sim') {
+        campos.partes[6] = 'Não';
+        linhaCorrigida = campos.partes.join('|');
+        corrigido = true;
+        ausencias.push('Documentação incompleta (Status vs DocCompleta)');
+    } else if (
+        motivoIndicaCenarioIncompleto(campos.motivo) &&
+        (docCompletaAtual === 'sim' || statusIndicaDocumentacaoValida(campos.status))
+    ) {
+        linhaCorrigida = forcarAusenciaDocObrigatorio(
+            campos,
+            ['documentos obrigatórios (Cenário 1/2 no motivo)'],
+            'Correção automática',
+        );
+        corrigido = true;
+        ausencias.push('Cenário 1/2 no motivo');
     }
 
-    campos.partes[6] = 'Não';
-    campos.partes[8] = 'Ausência de doc obrigatório';
-    campos.partes[10] =
-        `Correção automática: ausência de ${ausencias.join(', ')} no docbasico.pdf. ` +
-        `(IA havia retornado Status="${campos.status}" / DocCompleta="${campos.documentacaoCompleta}")`;
+    if (corrigido) {
+        gravarLog(
+            ctx,
+            `⚙️ [CORRECAO BDD] Ausência/inconsistência detectada (${ausencias.join(', ')}): linha ajustada para DocCompleta=Não e Status=Ausência de doc obrigatório.`,
+        );
+    }
 
-    const linhaCorrigida = campos.partes.join('|');
-    gravarLog(
-        ctx,
-        `⚙️ [CORRECAO BDD] Ausência detectada (${ausencias.join(', ')}): linha ajustada para DocCompleta=Não e Status=Ausência de doc obrigatório.`,
-    );
-
-    return { linhaFinal: linhaCorrigida, corrigido: true, ausencias };
+    return { linhaFinal: linhaCorrigida, corrigido, ausencias };
 }
 
 function montarPayloadPlanilha(numPasta, respostaIA) {
