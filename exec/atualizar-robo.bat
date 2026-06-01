@@ -28,16 +28,15 @@ set "LOCAL_ZIP="
 
 REM --- Ler config\atualizacao.json se existir ---
 set "CFG_ATUALIZACAO=%PROJECT_ROOT%\config\atualizacao.json"
-if exist "%CFG_ATUALIZACAO%" (
-    for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command ^
-        "$c=Get-Content '%CFG_ATUALIZACAO%' -Raw | ConvertFrom-Json; ^
-        if($c.destinoPadrao){Write-Output ('DEST='+$c.destinoPadrao)}; ^
-        if($c.zipUrl){Write-Output ('ZIPURL='+$c.zipUrl)}; ^
-        if($c.github.owner){Write-Output ('OWNER='+$c.github.owner)}; ^
-        if($c.github.repo){Write-Output ('REPO='+$c.github.repo)}; ^
-        if($c.github.branch){Write-Output ('BRANCH='+$c.github.branch)}"`) do (
+set "PS_LER_CONFIG=%~dp0ler-atualizacao-config.ps1"
+if exist "%CFG_ATUALIZACAO%" if exist "%PS_LER_CONFIG%" (
+    for /f "usebackq delims=" %%A in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%PS_LER_CONFIG%" "%CFG_ATUALIZACAO%"`) do (
         set "%%A"
     )
+) else if exist "%CFG_ATUALIZACAO%" (
+    echo [AVISO] exec\ler-atualizacao-config.ps1 nao encontrado. Usando valores padrao.
+    echo         Atualize o projeto para ler config\atualizacao.json automaticamente.
+    echo.
 )
 
 if not defined DEST set "DEST=%DEFAULT_DEST%"
