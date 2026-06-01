@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+set "EXIT_CODE=0"
 title Atualizar Robo Alvara (GitHub ZIP)
 color 0B
 
@@ -18,7 +19,7 @@ set "ARG_DEST=%~1"
 set "ARG_ZIP=%~2"
 
 REM --- Defaults ---
-set "DEFAULT_DEST=C:\Users\nayarapb\Documents\Teste_Robo_EAA_DVS"
+set "DEFAULT_DEST=C:\Users\nayarapb\Documents\Teste_Robo_EAA_DVS\robo-alvara-main"
 set "GITHUB_OWNER=naypopro-code"
 set "GITHUB_REPO=robo-alvara"
 set "GITHUB_BRANCH=main"
@@ -74,7 +75,7 @@ echo Destino confirmado: %DEST%
 set /p "CONFIRM=Continuar? (S/N) [S]: "
 if /I "%CONFIRM%"=="N" (
     echo [INFO] Operacao cancelada.
-    exit /b 0
+    goto :finalizar
 )
 
 if not exist "%DEST%" (
@@ -83,8 +84,8 @@ if not exist "%DEST%" (
     mkdir "%DEST%" 2>nul
     if errorlevel 1 (
         echo [ERRO] Nao foi possivel criar a pasta de destino.
-        pause
-        exit /b 1
+        set "EXIT_CODE=1"
+        goto :finalizar
     )
 )
 
@@ -101,8 +102,8 @@ if defined LOCAL_ZIP (
     echo       Usando ZIP local: %LOCAL_ZIP%
     if not exist "%LOCAL_ZIP%" (
         echo [ERRO] Arquivo ZIP local nao encontrado.
-        pause
-        exit /b 1
+        set "EXIT_CODE=1"
+        goto :finalizar
     )
     copy /Y "%LOCAL_ZIP%" "%ZIP_PATH%" >nul
 ) else (
@@ -141,31 +142,31 @@ if defined LOCAL_ZIP (
         echo   C) Baixe o ZIP manualmente no GitHub e rode:
         echo        exec\atualizar-robo.bat "%DEST%" "C:\caminho\robo-alvara-main.zip"
         echo.
-        pause
-        exit /b 1
+        set "EXIT_CODE=1"
+        goto :finalizar
     )
 )
 
 if not exist "%ZIP_PATH%" (
     echo [ERRO] ZIP nao encontrado apos download.
-    pause
-    exit /b 1
+    set "EXIT_CODE=1"
+    goto :finalizar
 )
 
 echo [3/5] Extraindo arquivos...
 powershell -NoProfile -Command "Expand-Archive -Path '%ZIP_PATH%' -DestinationPath '%EXTRACT_DIR%' -Force"
 if errorlevel 1 (
     echo [ERRO] Falha ao extrair o ZIP.
-    pause
-    exit /b 1
+    set "EXIT_CODE=1"
+    goto :finalizar
 )
 
 set "SRC_DIR="
 for /d %%D in ("%EXTRACT_DIR%\robo-alvara-*") do set "SRC_DIR=%%D"
 if not defined SRC_DIR (
     echo [ERRO] Pasta extraida nao encontrada (esperado robo-alvara-*).
-    pause
-    exit /b 1
+    set "EXIT_CODE=1"
+    goto :finalizar
 )
 
 echo [4/5] Preservando config e documentos locais...
@@ -186,8 +187,8 @@ robocopy "%SRC_DIR%" "%DEST%" /E /XD "data\documentos" "node_modules" ".git" /XF
 set "ROBOCOPY_EXIT=!ERRORLEVEL!"
 if !ROBOCOPY_EXIT! GEQ 8 (
     echo [ERRO] Falha ao copiar arquivos (robocopy codigo !ROBOCOPY_EXIT!).
-    pause
-    exit /b 1
+    set "EXIT_CODE=1"
+    goto :finalizar
 )
 
 if exist "%BACKUP_DIR%\config.json" (
@@ -211,5 +212,10 @@ echo   1) Rode exec\configurar-projeto-inicial.bat (se necessario)
 echo   2) Confira config\config.json
 echo   3) Rode exec\executar.bat
 echo.
-pause
-exit /b 0
+goto :finalizar
+
+:finalizar
+echo.
+echo Pressione qualquer tecla para fechar esta janela...
+pause >nul
+endlocal & exit %EXIT_CODE%
