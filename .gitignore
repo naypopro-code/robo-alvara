@@ -29,6 +29,7 @@ Chave_Robo_DVS.txt
 
 # Local config (real values) — keep config/config.sample.json committed
 config/config.json
+config/config.*.json
 
 # Run data: PDFs e saidas geradas. Nada em data/ deve ser commitado,
 # exceto este .gitkeep que mantem a pasta no repo.
