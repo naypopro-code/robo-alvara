@@ -374,6 +374,142 @@ function extrairLinhaPipeFinal(respostaTexto) {
     return { ok: true, linhaFinal: linhas[linhas.length - 1].trim() };
 }
 
+function obterCaminhoChecklist(ctx) {
+    return ctx.caminhos.prompt.replace(/prompt\.txt$/i, 'prompt-checklist.txt');
+}
+
+function lerPromptChecklist(ctx) {
+    const caminho = obterCaminhoChecklist(ctx);
+    if (!fs.existsSync(caminho)) {
+        return null;
+    }
+    return fs.readFileSync(caminho, 'utf8');
+}
+
+function extrairJsonResposta(respostaTexto) {
+    const match = respostaTexto.match(/\{[\s\S]*\}/);
+    if (!match) {
+        return { ok: false, erro: 'JSON não encontrado na resposta do checklist.' };
+    }
+    try {
+        return { ok: true, data: JSON.parse(match[0]) };
+    } catch (err) {
+        return { ok: false, erro: `JSON inválido no checklist: ${err.message}` };
+    }
+}
+
+function tipoTitularEhPj(tipoTitular) {
+    const t = normalizarTextoColuna(tipoTitular);
+    return t.includes('juridica') || t === 'pj';
+}
+
+function avaliarChecklistDocumentos(data) {
+    const isPj = tipoTitularEhPj(data.tipoTitular);
+    const ausencias = [];
+
+    if (!data.requerimentoPresente) {
+        ausencias.push('Requerimento');
+    }
+    if (!data.cnpjOuIdentidadePresente) {
+        ausencias.push('CNPJ/Identidade');
+    }
+    if (isPj && data.contratoSocialAplica !== false && !data.contratoSocialPresente) {
+        ausencias.push('Contrato Social');
+    }
+    if (!data.alvaraPresente) {
+        ausencias.push('Alvará de Localização');
+    }
+
+    return { incompleto: ausencias.length > 0, ausencias, isPj };
+}
+
+function paginaChecklist(valor) {
+    if (valor === null || valor === undefined) {
+        return 'Ausência';
+    }
+    const texto = String(valor).trim();
+    if (!texto || valorIndicaAusencia(texto)) {
+        return 'Ausência';
+    }
+    return texto;
+}
+
+function montarLinhaAusenciaChecklist(numPasta, data, avaliacao) {
+    const cenario = avaliacao.isPj ? '1' : '2';
+    return [
+        numPasta,
+        data.dataEmail || '---',
+        data.email || '---',
+        data.cnpjCpf || '---',
+        data.razaoSocialNome || '---',
+        data.endereco || '---',
+        'Não',
+        '---',
+        'Ausência de doc obrigatório',
+        'Alta',
+        `Cenário ${cenario}: Faltam documentos obrigatórios próprios (${avaliacao.ausencias.join(', ')}). Triagem de CEP/endereço não executada.`,
+        data.requerimentoPresente ? paginaChecklist(data.pagRequerimento) : 'Ausência',
+        data.cnpjOuIdentidadePresente ? paginaChecklist(data.pagCnpjOuIdentidade) : 'Ausência',
+        avaliacao.isPj
+            ? data.contratoSocialPresente
+                ? paginaChecklist(data.pagContratoSocial)
+                : 'Ausência'
+            : 'Não se aplica',
+        data.alvaraPresente ? paginaChecklist(data.pagAlvaraLocalizacao) : 'Ausência',
+        '---',
+        '---',
+    ].join('|');
+}
+
+async function executarChecklistDocumentos(ctx, partesPdf, promptTemplate, numPasta) {
+    const promptFinal = aplicarNumPastaNoPrompt(promptTemplate, numPasta);
+    const chamada = await chamarGemini(ctx, partesPdf, promptFinal);
+    if (!chamada.ok) {
+        return { ok: false, erro: chamada.erro };
+    }
+
+    const texto = extrairTextoResposta(chamada.result);
+    if (!texto.ok) {
+        return { ok: false, erro: texto.erro };
+    }
+
+    console.log(`📋 [CHECKLIST RESPOSTA]:\n${texto.texto}`);
+
+    const json = extrairJsonResposta(texto.texto);
+    if (!json.ok) {
+        return { ok: false, erro: erroComRetry('parse_checklist', json.erro, { respostaTexto: texto.texto }) };
+    }
+
+    const avaliacao = avaliarChecklistDocumentos(json.data);
+    if (!avaliacao.incompleto) {
+        return { ok: true, completo: true, checklist: json.data };
+    }
+
+    const linhaFinal = montarLinhaAusenciaChecklist(numPasta, json.data, avaliacao);
+    return {
+        ok: true,
+        completo: false,
+        ausencias: avaliacao.ausencias,
+        linhaFinal,
+        checklist: json.data,
+    };
+}
+
+function motivoIndicaCenarioPosPresenca(motivo) {
+    const m = normalizarTextoColuna(motivo);
+    return (
+        m.includes('cenario 3') ||
+        m.includes('cenario 4') ||
+        m.includes('cenario 5') ||
+        m.includes('cenario 6') ||
+        m.includes('cenario 7') ||
+        m.includes('cenario 8') ||
+        m.includes('colisao de ceps') ||
+        m.includes('divergencia de dados') ||
+        m.includes('divergencia cadastral')
+    );
+}
+
 function extrairStatusDaLinha(linhaFinal) {
     const partes = linhaFinal.split('|');
     return partes[8] || 'Processado';
@@ -535,6 +671,20 @@ function aplicarRegrasConsistenciaBdd(ctx, linhaFinal) {
         );
         corrigido = true;
         ausencias.push('Cenário 1/2 no motivo');
+    } else if (
+        motivoIndicaCenarioPosPresenca(campos.motivo) &&
+        (valorIndicaAusencia(campos.pagRequerimento) ||
+            valorIndicaAusencia(campos.pagAlvaraLocalizacao) ||
+            detectarAusenciasObrigatorias(campos).length > 0)
+    ) {
+        const ausenciasPos = detectarAusenciasObrigatorias(campos);
+        linhaCorrigida = forcarAusenciaDocObrigatorio(
+            campos,
+            ausenciasPos.length > 0 ? ausenciasPos : ['documento obrigatório'],
+            'Correção automática',
+        );
+        corrigido = true;
+        ausencias.push(...ausenciasPos);
     }
 
     if (corrigido) {
@@ -628,6 +778,30 @@ function validarPreRequisitosPasta(numPasta, caminhoPasta) {
 
 async function analisarComGemini(ctx, numPasta, caminhoPasta, promptTemplate) {
     const partesPdf = montarPartesPdf(caminhoPasta, ARQUIVOS_PDF_OBRIGATORIOS);
+    const checklistTemplate = lerPromptChecklist(ctx);
+
+    if (checklistTemplate) {
+        console.log('📋 [CHECKLIST] Verificando presença de documentos obrigatórios...');
+        const checklist = await executarChecklistDocumentos(ctx, partesPdf, checklistTemplate, numPasta);
+        if (!checklist.ok) {
+            gravarLog(
+                ctx,
+                `⚠️ [CHECKLIST] Falha ao interpretar checklist: ${checklist.erro.message}. Prosseguindo com auditoria completa.`,
+            );
+        } else if (!checklist.completo) {
+            gravarLog(
+                ctx,
+                `🛑 [CHECKLIST] Documentação incompleta (${checklist.ausencias.join(', ')}). Auditoria de CEP/endereço não executada.`,
+            );
+            console.log(`🛑 [CHECKLIST] Documentação incompleta: ${checklist.ausencias.join(', ')}`);
+            console.log(`📝 [RESULTADO CHECKLIST]:\n${checklist.linhaFinal}`);
+            return { ok: true, linhaFinal: checklist.linhaFinal };
+        } else {
+            gravarLog(ctx, '✅ [CHECKLIST] Documentos obrigatórios presentes. Prosseguindo com auditoria completa.');
+            console.log('✅ [CHECKLIST] Documentos obrigatórios presentes. Prosseguindo com auditoria completa.');
+        }
+    }
+
     const promptFinal = aplicarNumPastaNoPrompt(promptTemplate, numPasta);
 
     console.log(`🧠 [IA] Analisando ${ARQUIVOS_PDF_OBRIGATORIOS.join(' e ')}...`);
