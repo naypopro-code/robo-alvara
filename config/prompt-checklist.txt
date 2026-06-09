@@ -11,6 +11,7 @@ Se não houver formulário oficial → requerimentoPresente=false, pagRequerimen
 # DOCUMENTOS OBRIGATÓRIOS
 - PJ: Requerimento + Cartão CNPJ próprio + Contrato Social próprio + Alvará de Localização (SMIC/SMDET).
 - PF: Requerimento + Identidade oficial com foto + Alvará de Localização (SMIC/SMDET).
+- ATENÇÃO: A "Certidão de dispensa de Alvará" NÃO substitui o "Alvará de Localização". Se houver apenas a dispensa, marque alvaraPresente=false e pagAlvaraLocalizacao="Ausência".
 
 # PAGINAÇÃO
 pagRequerimento, pagCnpjOuIdentidade, pagContratoSocial, pagAlvaraLocalizacao = número da folha física no PDF (contagem desde 1) ou "Ausência".
